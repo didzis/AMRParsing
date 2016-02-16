@@ -23,7 +23,8 @@ def load_hand_alignments(hand_aligned_file):
 def readAMR(amrfile_path):
     amrfile = codecs.open(amrfile_path,'r',encoding='utf-8')
     comment_list = []
-    comment = OrderedDict()
+    # comment = OrderedDict()
+    comment = {}
     amr_list = []
     amr_string = ''
 
@@ -37,6 +38,7 @@ def readAMR(amrfile_path):
                 comment_list.append(comment)
                 amr_list.append(amr_string)
                 amr_string = ''
+                # comment = OrderedDict()
                 comment = {}
         else:
             amr_string += line.strip()+' '
@@ -203,68 +205,107 @@ def _add_dependency(instances,result,FORMAT="stanford"):
                 i += 1
     elif FORMAT in ["stanfordConvert","stdconv+charniak"]:
         i = 0
+        splitre = re.compile(r'\(|, ')
         for line in result.split('\n'):
             if line.strip():
-                split_entry = re.split("\(|, ", line[:-1])
+                split_entry = splitre.split(line[:-1])
                 
                 if len(split_entry) == 3:
                     rel, l_lemma, r_lemma = split_entry
-                    m = re.match(r'(?P<lemma>.+)-(?P<index>[^-]+)', l_lemma)
-                    l_lemma, l_index = m.group('lemma'), m.group('index')
-                    # some string may start with @; change the segmenter
-                    m = re.match(r'(?P<lemma>[^\^]+)(\^(?P<trace>[^-]+))?-(?P<index>[^-]+)', r_lemma)
-                    try:
-                        r_lemma,r_trace, r_index = m.group('lemma'), m.group('trace'), m.group('index')
-                    except AttributeError:
-                        import pdb
-                        pdb.set_trace()
+                    l_lemma, l_index = l_lemma.rsplit('-', 1)
+                    r_lemma, r_index = r_lemma.rsplit('-', 1)
+                    parts = r_lemma.rsplit('^', 1)
+                    if len(parts) < 2 or not parts[1]:
+                        r_trace = None
+                    else:
+                        r_lemma, r_trace = parts
 
                     if r_index != 'null':
-                        #print >> sys.stderr, line                        
                         instances[i].addDependency( rel, l_index, r_index )
                     if r_trace is not None:
-                        instances[i].addTrace( rel, l_index, r_trace )                      
+                        instances[i].addTrace( rel, l_index, r_trace )
                 
             else:
                 i += 1
     else:
         raise ValueError("Unknown dependency format!")
 
-def preprocess(input_file,START_SNLP=True,INPUT_AMR=True):
+def preprocess(input_file,START_SNLP=True,INPUT_AMR=True, align=True, use_amr_tokens=False):
     '''nasty function'''
     tmp_sent_filename = None
     instances = None
     tok_sent_filename = None
     
     if INPUT_AMR: # the input file is amr annotation
-        
+
         amr_file = input_file
-        aligned_amr_file = amr_file + '.amr.tok.aligned'
-        if os.path.exists(aligned_amr_file):
-            comments,amr_strings = readAMR(aligned_amr_file)
+        if amr_file.endswith('.amr'):
+            aligned_amr_file = amr_file + '.tok.aligned'
+            amr_tok_file = amr_file + '.tok'
         else:
-            comments,amr_strings = readAMR(amr_file)
-        sentences = [c['snt'] for c in comments] # here should be 'snt'
+            aligned_amr_file = amr_file + '.amr.tok.aligned'
+            amr_tok_file = amr_file + '.amr.tok'
+
         tmp_sent_filename = amr_file+'.sent'
+        tok_sent_filename = tmp_sent_filename+'.tok' # write tokenized sentence file
+
+        comments,amr_strings = readAMR(amr_file)
+        if os.path.exists(aligned_amr_file):
+            print "Reading aligned AMR ..."
+            # read aligned amr and transfer alignment comments
+            comments_with_alignment,_ = readAMR(aligned_amr_file)
+            for comment,comment_with_alignment in zip(comments,comments_with_alignment):
+                comment['alignments'] = comment_with_alignment['alignments']
+
+        tokenized_sentences = None
+        try:
+            if use_amr_tokens:
+                tokenized_sentences = [c['tok'] for c in comments] # here should be 'snt'
+                if not os.path.exists(tok_sent_filename):
+                    with open(tok_sent_filename,'w') as f:
+                        for sentence in tokenized_sentences:
+                            print >> f, sentence
+                if tokenized_sentences:
+                    print >> log, "AMR has tokens, will use them"
+        except:
+            raise
+            pass
+
+        sentences = [c['snt'] for c in comments] # here should be 'snt'
         if not os.path.exists(tmp_sent_filename): # write sentences into file
             _write_sentences(tmp_sent_filename,sentences)
 
-
         print >> log, "Start Stanford CoreNLP..."
-        proc1 = StanfordCoreNLP()
+        proc1 = StanfordCoreNLP(tokenize=not tokenized_sentences)
 
         # preprocess 1: tokenization, POS tagging and name entity using Stanford CoreNLP
         if START_SNLP: proc1.setup()
-        instances = proc1.parse(tmp_sent_filename)
 
-        tok_sent_filename = tmp_sent_filename+'.tok' # write tokenized sentence file
+        instances = proc1.parse(tmp_sent_filename if proc1.tokenize else tok_sent_filename)
+
         if not os.path.exists(tok_sent_filename):
             _write_tok_sentences(tok_sent_filename,instances)
 
-        tok_amr_filename = amr_file + '.amr.tok'
-        if not os.path.exists(tok_amr_filename): # write tokenized amr file
-            _write_tok_amr(tok_amr_filename,amr_file,instances)
+        if len(instances) == 0:
+            print 'Error: no instances!'
+            sys.exit(1)
+
+        if not os.path.exists(amr_tok_file): # write tokenized amr file
+            _write_tok_amr(amr_tok_file,amr_file,instances)
             
+        if not os.path.exists(aligned_amr_file) and align:
+            # align
+            print "Call JAMR to generate alignment ..."
+            subprocess.call('./scripts/jamr_align.sh '+amr_tok_file,shell=True)
+            print "Reading aligned AMR ..."
+            # read aligned amr and transfer alignment comments
+            comments_with_alignment,_ = readAMR(aligned_amr_file)
+            for comment,comment_with_alignment in zip(comments,comments_with_alignment):
+                comment['alignments'] = comment_with_alignment['alignments']
+
+        from progress import Progress
+        p = Progress(len(instances), estimate=True, values=True)
+        print 'Parsing AMR:'
         SpanGraph.graphID = 0
         for i in range(len(instances)):
 
@@ -275,9 +316,11 @@ def preprocess(input_file,START_SNLP=True,INPUT_AMR=True):
                 ggraph = SpanGraph.init_ref_graph_abt(amr,alignment,s2c_alignment,instances[i].tokens)
                 #ggraph.pre_merge_netag(instances[i])
                 #print >> log, "Graph ID:%s\n%s\n"%(ggraph.graphID,ggraph.print_tuples())
-                instances[i].addComment(comments[i])
                 instances[i].addAMR(amr)
                 instances[i].addGoldGraph(ggraph)
+            instances[i].addComment(comments[i])
+            p += 1
+        p.complete()
 
     else:
         # input file is sentence

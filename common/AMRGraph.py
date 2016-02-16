@@ -119,7 +119,7 @@ class AMR(defaultdict):
             ("STRLITERAL",u'"[^"]+"|\u201c[^\u201d]+\u201d'),
             ("LITERAL","'[^\s(),]+"),
             ("INTERROGATIVE","\s(interrogative|imperative|expressive)(?=[\s\)])"),
-            ("QUANTITY","[0-9][0-9Ee^+\-\.,:]*"),
+            ("QUANTITY","[0-9][0-9Ee^+\-\.,:]*(?=[\s()])"),
             ("IDENTIFIER","[^\s()]+"), #no blank within characters
             ("POLARITY","\s(\-|\+)(?=[\s\)])")
         ] 

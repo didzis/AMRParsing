@@ -63,3 +63,13 @@ smatch*/
 # cache
 *~
 scripts/*~
+
+# vim
+.*.sw?
+
+# jamr
+jamr/
+
+# models
+*.m.gz
+*.m.bz2

@@ -79,7 +79,7 @@ class GraphState(object):
         GraphState.gold_graph = instance.gold_graph
         if GraphState.gold_graph: GraphState.gold_graph.abt_node_table = {}
         GraphState.deptree = depGraph
-        GraphState.sentID = instance.comment['id'] if instance.comment else GraphState.sentID + 1
+        GraphState.sentID = instance.comment['id'] if instance.comment and 'id' in instance.comment else GraphState.sentID + 1
         GraphState.verbose = verbose
         
         if verbose > 1:
@@ -1089,7 +1089,7 @@ class GraphState(object):
                                 if m.group(3) is not None: month = str(int(m.group(3)[1:]))
                                 if m.group(4) is not None: day = str(int(m.group(4)[1:]))
                             elif date_type == 'd2':
-                                year = '20'+m.group(6)
+                                year = '20'+m.group(6) if int(m.group(6)) <= 20 else '19'+m.group(6) # year range from 1921 till 2020
                                 month = str(int(m.group(7)))
                                 day = str(int(m.group(8)))
                             else:
@@ -1097,7 +1097,8 @@ class GraphState(object):
                                 pass
 
                             foo = amr[year]
-                            amr._add_triple(last_abs_id,'year',Quantity(year))
+                            if year != '0000':
+                                amr._add_triple(last_abs_id,'year',Quantity(year))
                             if month and month != '0':
                                 foo = amr[month]
                                 amr._add_triple(last_abs_id,'month',Quantity(month))

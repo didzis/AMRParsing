@@ -654,7 +654,11 @@ class SpanGraph(object):
             ancestor_index = self.nodes[true_index].parents[0]
             while not isinstance(ancestor_index,int):
                 true_index = ancestor_index
-                ancestor_index = self.nodes[true_index].parents[0]
+                try:
+                    ancestor_index = self.nodes[true_index].parents[0]
+                except:
+                    print >> sys.stderr, "FIXME: unable to get parent in find_true_head()"
+                    break
         return true_index
             
     def swap_head2(self,gov_index,dep_index,sigma,edge_label=None):

@@ -31,6 +31,7 @@ VERBOSE = True
 STATE_START, STATE_TEXT, STATE_WORDS, STATE_TREE, STATE_DEPENDENCY, STATE_COREFERENCE = 0, 1, 2, 3, 4, 5
 WORD_PATTERN = re.compile('\[([^\]]+)\]')
 CR_PATTERN = re.compile(r"\((\d*),(\d*),\[(\d*),(\d*)\)\) -> \((\d*),(\d*),\[(\d*),(\d*)\)\), that is: \"(.*)\" -> \"(.*)\"")
+UNESCAPE_PATTERN = re.compile(r'\\(.)')
 
 def parse_bracketed(s):
     '''Parse word features [abc=... def = ...]
@@ -44,9 +45,11 @@ def parse_bracketed(s):
         temp["^^^%d^^^" % i] = tag
         s = s.replace(tag, "^^^%d^^^" % i)
     # Load key-value pairs, substituting as necessary
-    for attr, val in re.findall(r"([^=\s]*)=([^=\s]*)", s):
+    for attr, val in re.findall(r"([^=\s]*)=([^\s]*)", s):
         if val in temp:
             val = temp[val]
+        # unescape
+        val = UNESCAPE_PATTERN.sub(r'\1', val)
         if attr == 'Text':
             word = val
         else:
@@ -127,6 +130,31 @@ def parse_parser_results(text):
     
     return data
 
+def parse_stanford_output(filename):
+
+    sentence_re = re.compile(r'^Sentence #(\d+) \((\d+) tokens\):$')
+
+    with open(filename) as f:
+
+        lines = (line.strip() for line in f)
+
+        for line in lines:
+
+            if sentence_re.match(line):
+                sentence = next(lines)
+                annotation = next(lines)
+                tokens = annotation[1:-1].split('] [')
+                data = Data()
+                data.addText(sentence)
+                Data.newSen()
+                for i,token in enumerate(tokens):
+                    t = parse_bracketed(token)
+                    data.addToken(t[0], t[1][u'CharacterOffsetBegin'], t[1][u'CharacterOffsetEnd'],
+                                  t[1][u'Lemma'],t[1][u'PartOfSpeech'],t[1][u'NamedEntityTag']) #, first=i==0, last=i==len(tokens)-1)
+                yield data
+            else:
+                raise Exception('unexpected line: '+line)
+
 def add_sep_dependency(instances,result):
     i = 0
     for line in result.split('\n'):
@@ -154,9 +182,11 @@ class StanfordCoreNLP(object):
     """
 
 
-    def __init__(self):
+    def __init__(self, tokenize=True):
         Data.current_sen = 1
-        pass
+        self.corenlp = None
+        self.tokenize = tokenize
+        self.setup()
         
     def setup(self):
         """
@@ -171,17 +201,18 @@ class StanfordCoreNLP(object):
        
         # if CoreNLP libraries are in a different directory,
         # change the corenlp_path variable to point to them
-        corenlp_path = os.path.relpath(__file__).split('/')[0]+"/stanford-corenlp-full-2013-06-20/"
+        corenlp_path = os.path.join(os.path.dirname(__file__), "stanford-corenlp-full-2013-06-20")
         #corenlp_path = "stanford-corenlp-full-2013-06-20/"
         
         java_path = "java"
         classname = "edu.stanford.nlp.pipeline.StanfordCoreNLP"
         # include the properties file, so you can change defaults
         # but any changes in output format will break parse_parser_results()
-        props = "-props "+ os.path.relpath(__file__).split('/')[0]+"/default.properties"
+        prop_filename = "default.properties" if self.tokenize else "notokenize.properties"
+        props = "-props "+ os.path.join(os.path.dirname(__file__), prop_filename)
         
         # add and check classpaths
-        jars = [corenlp_path + jar for jar in jars]
+        jars = [os.path.join(corenlp_path, jar) for jar in jars]
         for jar in jars:
             if not os.path.exists(jar):
                 print "Error! Cannot locate %s" % jar
@@ -190,7 +221,10 @@ class StanfordCoreNLP(object):
         #Change from ':' to ';'
         # spawn the server
         start_corenlp = "%s -Xmx2500m -cp %s %s %s" % (java_path, ':'.join(jars), classname, props)
+        self.cmd = start_corenlp
         if VERBOSE: print start_corenlp
+        return  # won't use pexpect as this disables parallelization
+
         self.corenlp = pexpect.spawn(start_corenlp)
         
         # show progress bar while loading the models
@@ -249,7 +283,7 @@ class StanfordCoreNLP(object):
             except pexpect.EOF:
                 break
         
-        if VERBOSE: print "%s\n%s" % ('='*40, repr(incoming))
+        # if VERBOSE: print "%s\n%s" % ('='*40, repr(incoming))
         return incoming
 
     '''
@@ -292,6 +326,20 @@ class StanfordCoreNLP(object):
     '''
 
     def parse(self, sent_filename):
+        instances = []
+        prp_filename = sent_filename+'.prp' # preprocessed file
+
+        if not os.path.exists(prp_filename):
+            print "Stanford CoreNLP ..."
+            subprocess.call(self.cmd + ' < %s > %s 2>/dev/null' % (sent_filename, prp_filename), shell=True)
+
+        print 'Reading', prp_filename, '...'
+        for instance in parse_stanford_output(prp_filename):
+            instances.append(instance)
+            # p += 1
+        # p.complete()
+        return instances
+
         """ 
         This function takes a text string, sends it to the Stanford CoreNLP,
         reads in the result, parses the results and returns a list

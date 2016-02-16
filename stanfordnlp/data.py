@@ -6,8 +6,6 @@ from constants import ROOT_FORM,ROOT_LEMMA,ROOT_POS,EMPTY
 class Data():
     '''represent dota instance of one sentence'''
     
-    current_sen = 1
-    
     def __init__(self):
         self.tree = None
         self.coreference = None
@@ -40,10 +38,10 @@ class Data():
     def addToken( self, token, offset_begin, offset_end, lem, pop, ne ):
         tok_inst = {}
         tok_inst['id'] = len(self.tokens)
-        tok_inst['form'] = token 
+        tok_inst['form'] = unicode(token)
         #tok_inst['offset_begin'] = offset_begin
         #tok_inst['offset_end'] = offset_end
-        tok_inst['lemma'] = lem
+        tok_inst['lemma'] = unicode(lem)
         tok_inst['pos'] = pop
         tok_inst['ne'] = ne
         tok_inst['rel'] = EMPTY

@@ -13,31 +13,125 @@ class DepParser(object):
         raise NotImplemented("Must implement setup method!")
 
 
+import sys, traceback
+from multiprocessing import Queue, Process, Lock, JoinableQueue, cpu_count
+from multiprocessing.sharedctypes import Value
+from Queue import Empty
+from progress import Progress
+
+
+# parse process body
+def parse_queue(parser, queue, results, count, sync_after=0, p=None, i=-1):
+
+    local_count = 0
+    try:
+        while True:
+            item = queue.get(True, 2)
+            r = "(())"  # dummy output if wasn't able to parse
+            try:
+                ll = item[1].strip()
+                if ll:
+                    r = parser.simple_parse(ll.split())     # call parser
+            except KeyboardInterrupt:
+                print >> sys.stderr, 'Interrupted'
+                return
+            except Exception as e:
+                print >> sys.stderr, 'WARNING: unable to parse sentence:'
+                print >> sys.stderr, ll.strip()
+
+            results.put((item[0], r))
+
+            local_count += 1
+            queue.task_done()
+
+            if local_count >= sync_after:
+                count.value += local_count
+                local_count = 0
+                if p is not None:
+                    p.set(count.value)
+
+    except Empty:
+        pass
+
+    if local_count > 0:
+        count.value += local_count
+
+    if p is not None:
+        p.set(count.value)
+
+
 class CharniakParser(DepParser):
+
+    parser = None
+
+    def __init__(self):
+        if CharniakParser.parser is None:
+            from bllipparser.ModelFetcher import download_and_install_model
+            from bllipparser import RerankingParser
+            model_type = 'WSJ+Gigaword'
+            path_to_model = download_and_install_model(model_type,'./bllip-parser/models')
+            print "Loading Charniak parser model: %s ..." % (model_type)
+            CharniakParser.parser = RerankingParser.from_unified_model_dir(path_to_model)
     
     def parse(self,sent_filename):
         """
         use Charniak parser to parse sentences then convert results to Stanford Dependency
         """
-        from bllipparser.ModelFetcher import download_and_install_model
-        from bllipparser import RerankingParser
-        #path_to_model = './bllip-parser/models/WSJ+Gigaword'
-        #if not.path.exists(path_to_model):
-        model_type = 'WSJ+Gigaword'
-        path_to_model = download_and_install_model(model_type,'./bllip-parser/models')
-        print "Loading Charniak parser model: %s ..." % (model_type)
-        rrp = RerankingParser.from_unified_model_dir(path_to_model)
+        rrp = CharniakParser.parser
         print "Begin Charniak parsing ..."
         parsed_filename = sent_filename+'.charniak.parse'
         parsed_trees = ''
-        with open(sent_filename,'r') as f:
-            for l in f:
-                parsed_trees += rrp.simple_parse(l.strip().split())
-                parsed_trees += '\n'
 
-        with open(parsed_filename,'w') as of:
-            of.write(parsed_trees)
-                
+        # will use multiprocessing to parallelize parsing
+
+        queue = JoinableQueue()
+        results = Queue()
+
+        print 'Reading', sent_filename, '...'
+        data = []
+        with open(sent_filename,'rb') as f:
+            for line in f:
+                l = line.decode('utf8', errors='ignore')
+                queue.put((len(data), l))
+                data.append('')
+
+        print 'Starting jobs ...'
+
+        p = Progress(len(data), estimate=True, values=True) # output progress bar
+
+        # define jobs
+        count = Value('i', 0)
+        num_threads = cpu_count()
+        sync_count = len(data)/1000/num_threads
+        jobs = [Process(target=parse_queue, args=(rrp, queue, results, count, sync_count, p if i == 0 else None, i)) for i in range(num_threads)]
+
+        # start jobs
+        for job in jobs:
+            job.start()
+
+        # gathering results from jobs
+        total_count = 0
+        delta_count = 0
+        while total_count < len(data):
+            try:
+                item = results.get(True, 2)
+                data[item[0]] = item[1]
+                total_count += 1
+            except Empty:
+                pass
+
+        p.set(total_count)
+        p.complete()
+
+        # wait for jobs to finish
+        queue.join()
+        for job in jobs:
+            job.join()
+
+        print 'Writing', parsed_filename, '...'
+        with open(parsed_filename, 'w') as f:
+            for item in data:
+                print >> f, item
 
         # convert parse tree to dependency tree
         print "Convert Charniak parse tree to Stanford Dependency tree ..."
@@ -51,12 +145,14 @@ class StanfordDepParser(DepParser):
         separate dependency parser
         """
 
-        jars = ["stanford-parser-3.3.1-models.jar",
-                "stanford-parser.jar"]
+        # jars = ["stanford-parser-3.3.1-models.jar",
+        #         "stanford-parser.jar"]
+        jars = ["stanford-corenlp-3.2.0-models.jar",
+                "stanford-corenlp-3.2.0.jar"]
        
         # if CoreNLP libraries are in a different directory,
         # change the corenlp_path variable to point to them
-        stanford_path = "/home/j/llc/cwang24/R_D/AMRParsing/stanfordnlp/stanford-parser/"
+        stanford_path = os.path.join(os.path.dirname(__file__), "stanfordnlp/stanford-corenlp-full-2013-06-20")
         
         java_path = "java"
         classname = "edu.stanford.nlp.parser.lexparser.LexicalizedParser"
@@ -66,10 +162,11 @@ class StanfordDepParser(DepParser):
         flags = "-tokenized -sentences newline -outputFormat typedDependencies -outputFormatOptions basicDependencies,markHeadNodes"
         # add and check classpaths
         model = "edu/stanford/nlp/models/lexparser/englishPCFG.ser.gz"
-        jars = [stanford_path + jar for jar in jars]
+        jars = [os.path.join(stanford_path, jar) for jar in jars]
         for jar in jars:
             if not os.path.exists(jar):
                 print "Error! Cannot locate %s" % jar
+                import sys
                 sys.exit(1)
 
         #Change from ':' to ';'

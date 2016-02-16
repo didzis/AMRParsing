@@ -61,17 +61,20 @@ def get_dependency_graph(stp_dep,FROMFILE=False):
     return dpg_list
 
 def write_parsed_amr(parsed_amr,instances,amr_file,suffix='parsed',hand_alignments=None):
-    output = open(amr_file+'.'+suffix,'w')
+    output = open(amr_file+'.'+suffix if suffix else amr_file,'w')
     for pamr,inst in zip(parsed_amr,instances):
         if inst.comment:
-            output.write('# %s\n' % (' '.join(('::%s %s')%(k,v) for k,v in inst.comment.items() if k in ['id','date','snt-type','annotator'])))
-            output.write('# %s\n' % (' '.join(('::%s %s')%(k,v) for k,v in inst.comment.items() if k in ['tok'])))
-            if hand_alignments:
-                output.write('# ::alignments %s ::gold\n' % (hand_alignments[inst.comment['id']]))
-            output.write('# %s\n' % (' '.join(('::%s %s')%(k,v) for k,v in inst.comment.items() if k in ['alignments'])))
+            output.write('# %s\n' % (' '.join(('::%s %s')%(k,v.strip()) for k,v in inst.comment.items() if k in ['id','date','snt-type','annotator'])))
+            if 'snt' in inst.comment:
+                output.write('# ::snt %s\n' % inst.comment['snt'].strip())
+            if 'tok' in inst.comment:
+                output.write('# ::tok %s\n' % inst.comment['tok'].strip())
+            # if hand_alignments:
+            #     output.write('# ::alignments %s ::gold\n' % (hand_alignments[inst.comment['id']]))
+            # output.write('# %s\n' % (' '.join(('::%s %s')%(k,v) for k,v in inst.comment.items() if k in ['alignments'])))
         else:
             output.write('# ::id %s\n'%(inst.sentID))
-            output.write('# ::snt %s\n'%(inst.text))
+            output.write('# ::snt %s\n'%(inst.text.strip()))
 
         try:
             output.write(pamr.to_amr_string())
@@ -144,6 +147,8 @@ def main():
     arg_parser.add_argument('--amrfmt',action='store_true',help='specifying the input file is AMR annotation file')
     arg_parser.add_argument('-e','--eval',nargs=2,help='Error Analysis: give parsed AMR file and gold AMR file')
     arg_parser.add_argument('--section',choices=['proxy','all'],default='all',help='choose section of the corpus. Only works for LDC2014T12 dataset.')
+    arg_parser.add_argument('--amrtokens',action='store_true',help='use AMR tokens together with --amrfmt and ::tok in comments of input AMR file')
+    arg_parser.add_argument('-o', '--output', help='specify parse mode output filename')
 
     args = arg_parser.parse_args()
 
@@ -303,8 +308,8 @@ def main():
         print "Incorporate Coref Information: %s"%(constants.FLAG_COREF)
         print "Incorporate SRL Information: %s"%(constants.FLAG_PROP)
         print "Dependency parser used: %s"%(constants.FLAG_DEPPARSER)
-        train_instances = preprocess(amr_file,START_SNLP=False)        
-        if args.dev: dev_instances = preprocess(args.dev,START_SNLP=False)
+        train_instances = preprocess(amr_file,START_SNLP=False, use_amr_tokens=args.amrtokens)
+        if args.dev: dev_instances = preprocess(args.dev,START_SNLP=False, use_amr_tokens=args.amrtokens)
 
 
         if args.section != 'all':
@@ -341,7 +346,7 @@ def main():
         print >> experiment_log ,"DONE TRAINING!"
         
     elif args.mode == 'parse': # actual parsing
-        test_instances = preprocess(amr_file,START_SNLP=False,INPUT_AMR=False)
+        test_instances = preprocess(amr_file,START_SNLP=False,INPUT_AMR=args.amrfmt, use_amr_tokens=args.amrtokens)
         if args.section != 'all':
             print "Choosing corpus section: %s"%(args.section)
             tcr = constants.get_corpus_range(args.section,'test')
@@ -353,7 +358,10 @@ def main():
         parser = Parser(model=model,oracle_type=DET_T2G_ORACLE_ABT,action_type=args.actionset,verbose=args.verbose,elog=experiment_log)
         print >> experiment_log ,"BEGIN PARSING"
         span_graph_pairs,results = parser.parse_corpus_test(test_instances)
-        write_parsed_amr(results,test_instances,amr_file,suffix='%s.parsed'%(args.section))
+        if args.output:
+            write_parsed_amr(results,test_instances,args.output,suffix=None)
+        else:
+            write_parsed_amr(results,test_instances,amr_file,suffix='%s.parsed'%(args.section))
         #write_span_graph(span_graph_pairs,test_instances,amr_file,suffix='spg.50')
         ################
         # for eval     #

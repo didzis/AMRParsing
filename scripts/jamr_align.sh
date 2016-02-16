@@ -1,6 +1,8 @@
 #!/bin/bash
 
-JAMR_HOME="/home/j/llc/cwang24/Tools/jamr"
+pushd `dirname $0`/../jamr
+JAMR_HOME=`pwd`
+popd
 
 #### Config ####
 ${JAMR_HOME}/scripts/config.sh
@@ -9,4 +11,4 @@ ${JAMR_HOME}/scripts/config.sh
 
 echo "### Aligning $1 ###"
 # input should be tokenized AMR file, which has :tok tag in the comments
-${JAMR_HOME}/run Aligner -v 0 < $1 > $1.aligned
+${JAMR_HOME}/run Aligner -v 0 < $1 > $1.aligned 2>/dev/null

@@ -1,0 +1,13 @@
+--- a/src/AlignSpans3.scala	2016-02-15 23:31:28.000000000 +0200
++++ b/src/AlignSpans3.scala	2016-02-15 23:49:06.000000000 +0200
+@@ -114,7 +114,9 @@
+                 val monthStr = month.lift(0).getOrElse("")
+                 val dayStr=day.lift(0).getOrElse("")
+                 ((year ::: month ::: day).permutations.map("\t0*"+_.mkString("\t*0*")+"\t").mkString("|")
+-                +"|\t"+to2Digit(yearStr)+to2Digit(monthStr)+to2Digit(dayStr)+"\t").r
++                +"|\t"+to2Digit(yearStr)+to2Digit(monthStr)+to2Digit(dayStr)+"\t"
++                +"|\t"+year.lift(0).getOrElse("0000")+"-"+to2Digit(monthStr)+"-"+to2Digit(dayStr)+"\t" // allow date format yyyy-mm-dd
++                +"|\t"+year.lift(0).getOrElse("0000")+to2Digit(monthStr)+to2Digit(dayStr)+"\t").r // allow date format yyyymmdd
+             }
+         }
+ 

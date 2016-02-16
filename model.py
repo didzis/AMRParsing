@@ -330,12 +330,26 @@ class Model():
         #    print >> sys.stderr, 'Saving model error:', e
         #    pass
             
+        # try:
+        #     with contextlib.closing(bz2.BZ2File(model_filename, 'wb')) as f:
+        #         pickle.dump(self,f,pickle.HIGHEST_PROTOCOL)
+        # except:
+        #     print >> sys.stderr, 'Saving model error', sys.exc_info()[0]
+        #     pass
+
+        import npickle
         try:
-            with contextlib.closing(bz2.BZ2File(model_filename, 'wb')) as f:
-                pickle.dump(self,f,pickle.HIGHEST_PROTOCOL)
+            print 'Saving model to', model_filename + '.bz2'
+            npickle.dump_bzip2(self, model_filename + '.bz2')
         except:
-            print >> sys.stderr, 'Saving model error', sys.exc_info()[0]
-            pass
+            print 'bzip2 not available, will try gzip'
+            print 'Saving model to', model_filename + '.gz'
+            try:
+                npickle.dump_gzip(self, model_filename + '.gz')
+            except:
+                print 'gzip not available, will try plain'
+                print 'Saving model to', model_filename
+                npickle.dump(self, model_filename)
 
 
         #self.weight = weight
@@ -345,8 +359,26 @@ class Model():
     @staticmethod
     def load_model(model_filename):
         
-        with contextlib.closing(bz2.BZ2File(model_filename, 'rb')) as f:
-            model = pickle.load(f)
+        # with contextlib.closing(bz2.BZ2File(model_filename, 'rb')) as f:
+        #     model = pickle.load(f)
+
+        print 'Loading model from', model_filename
+        import npickle
+        if model_filename.endswith('.bz2'):
+            model = npickle.load_bzip2(model_filename)
+        elif model_filename.endswith('.gz'):
+            model = npickle.load_gzip(model_filename)
+        else:
+            try:
+                model = npickle.load_bzip2(model_filename)
+            except:
+                print 'npickle+bzip2 failed, will try npickle+gzip'
+                try:
+                    model = npickle.load_gzip(model_filename)
+                except:
+                    print 'npickle+gzip failed, will try plain'
+                    model = npickle.load(model_filename)
+
         # deal with module name conflict
         #tmp = sys.path.pop(0)
         #model.avg_weight = np.load(open(model_filename+'.weight', 'rb'))
