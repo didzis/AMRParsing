@@ -33,8 +33,7 @@ def parse_queue(parser, queue, results, count, sync_after=0, p=None, i=-1):
                 if ll:
                     r = parser.simple_parse(ll.split())     # call parser
             except KeyboardInterrupt:
-                print >> sys.stderr, 'Interrupted'
-                return
+                raise
             except Exception as e:
                 print >> sys.stderr, 'WARNING: unable to parse sentence:'
                 print >> sys.stderr, ll.strip()
@@ -50,6 +49,10 @@ def parse_queue(parser, queue, results, count, sync_after=0, p=None, i=-1):
                 if p is not None:
                     p.set(count.value)
 
+    except KeyboardInterrupt:
+        # print >> sys.stderr, 'Job interrupted'
+        os.abort() # abort instead of exit so that multiprocessing won't wait
+        return
     except Empty:
         pass
 
@@ -95,38 +98,46 @@ class CharniakParser(DepParser):
                 queue.put((len(data), l))
                 data.append('')
 
-        print 'Starting jobs ...'
-
         p = Progress(len(data), estimate=True, values=True) # output progress bar
 
         # define jobs
         count = Value('i', 0)
         num_threads = cpu_count()
         sync_count = len(data)/1000/num_threads
-        jobs = [Process(target=parse_queue, args=(rrp, queue, results, count, sync_count, p if i == 0 else None, i)) for i in range(num_threads)]
 
-        # start jobs
-        for job in jobs:
-            job.start()
+        print 'Starting %i jobs ...' % num_threads
 
-        # gathering results from jobs
-        total_count = 0
-        delta_count = 0
-        while total_count < len(data):
-            try:
-                item = results.get(True, 2)
-                data[item[0]] = item[1]
-                total_count += 1
-            except Empty:
-                pass
+        jobs = [Process(target=parse_queue, args=(rrp, queue, results, count, sync_count, p if i == -1 else None, i)) for i in range(num_threads)]
 
-        p.set(total_count)
-        p.complete()
+        try:
+            # start jobs
+            for job in jobs:
+                job.start()
 
-        # wait for jobs to finish
-        queue.join()
-        for job in jobs:
-            job.join()
+            # gathering results from jobs
+            total_count = 0
+            while total_count < len(data):
+                try:
+                    item = results.get(True, 0.3)   # timeout delay small enough to update progress bar, see below
+                    data[item[0]] = item[1]
+                    total_count += 1
+                except Empty:
+                    pass
+                p.set(count.value)  # even if no results are received (cached somewhere), the counter will be updated after get() timeout above
+                # NOTE: There might be a slight delay after reaching 100%, because the finished results counter is ahead of received results counter;
+                # will stay at 100% until all results are received.
+
+            p.set(total_count)
+            p.complete()
+
+            # wait for jobs to finish
+            queue.join()
+            for job in jobs:
+                job.join()
+
+        except KeyboardInterrupt:
+            print >> sys.stderr, '\nInterrupted, aborting'
+            os.abort() # abort instead of exit so that multiprocessing won't wait
 
         print 'Writing', parsed_filename, '...'
         with open(parsed_filename, 'w') as f:
