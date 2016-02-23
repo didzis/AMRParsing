@@ -19,6 +19,8 @@ class LexerError(Exception):
 class ParserError(Exception):
     pass
 
+warn_file = sys.stderr
+
 class Node():
 
     #node_id = 0     #static counter, unique for each node
@@ -461,6 +463,7 @@ class AMR(defaultdict):
         """                                                                                         
         Add a (parent, relation, child) triple to the DAG.                                          
         """
+        warn = warn_file
         if type(child) is not tuple:
             child = (child,)
         if parent in child:
@@ -675,6 +678,15 @@ class AMR(defaultdict):
     '''       
             
     def to_amr_string(self):
+
+        # fix/normalize some concepts
+        normalized_concepts = {
+                u'"': '_quote',
+                u'“': '_quote_open',
+                u'”': '_quote_close',
+        }
+        for v,concept in self.node_to_concepts.items():
+            normalized_concepts[v] = normalized_concepts.get(concept, concept)
         
         amr_string = ""
         

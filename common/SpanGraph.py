@@ -12,6 +12,7 @@ import constants
 from common.AMRGraph import *
 from collections import defaultdict
 
+warn_file = sys.stderr
 
 class SpanNode(object):
 
@@ -141,7 +142,8 @@ class SpanGraph(object):
             hchild_id = span_alignment[amr.roots[0]][0].start
             spgraph.add_edge(0,hchild_id)
         else:
-            print >> sys.stderr, "GraphID:%s WARNING:root %s not aligned!"%(SpanGraph.graphID,amr.node_to_concepts[amr.roots[0]])
+            if warn_file:
+                print >> warn_file, "GraphID:%s WARNING:root %s not aligned!"%(SpanGraph.graphID,amr.node_to_concepts[amr.roots[0]])
             
             '''
             # make up a fake root that connect all the multi-roots
@@ -307,7 +309,8 @@ class SpanGraph(object):
             hchild_id = span_alignment[amr.roots[0]][0].start
             spgraph.add_edge(0,hchild_id)
         else:
-            print >> sys.stderr, "GraphID:%s WARNING:root %s not aligned!"%(SpanGraph.graphID,amr.node_to_concepts[amr.roots[0]])
+            if warn_file:
+                print >> warn_file, "GraphID:%s WARNING:root %s not aligned!"%(SpanGraph.graphID,amr.node_to_concepts[amr.roots[0]])
             
             '''
             # make up a fake root that connect all the multi-roots

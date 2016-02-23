@@ -21,7 +21,7 @@ def load_hand_alignments(hand_aligned_file):
         
 
 def readAMR(amrfile_path):
-    amrfile = codecs.open(amrfile_path,'r',encoding='utf-8')
+    amrfile = codecs.open(amrfile_path,'r',encoding='utf-8',errors='ignore')
     comment_list = []
     # comment = OrderedDict()
     comment = {}
@@ -34,7 +34,7 @@ def readAMR(amrfile_path):
                 #print m.group(1),m.group(2)
                 comment[m.group(1)] = m.group(2)
         elif not line.strip():
-            if amr_string and comment:
+            if amr_string or comment:
                 comment_list.append(comment)
                 amr_list.append(amr_string)
                 amr_string = ''
@@ -43,7 +43,7 @@ def readAMR(amrfile_path):
         else:
             amr_string += line.strip()+' '
 
-    if amr_string and comment:
+    if amr_string or comment:
         comment_list.append(comment)
         amr_list.append(amr_string)
     amrfile.close()
@@ -76,9 +76,10 @@ def _write_tok_amr(file_path,amr_file,instances):
     amr_list = []
     for line in open(amr_file,'r').readlines():
         if line.startswith('#'):
-            origin_comment_string += line 
+            if line.find(' ::') != -1:
+                origin_comment_string += line
         elif not line.strip():
-            if origin_amr_string and origin_comment_string:
+            if origin_amr_string or origin_comment_string:
                 comment_list.append(origin_comment_string)
                 amr_list.append(origin_amr_string)
 
@@ -86,13 +87,41 @@ def _write_tok_amr(file_path,amr_file,instances):
                 origin_comment_string = ''
         else:
             origin_amr_string += line
-    if origin_amr_string and origin_comment_string:
+    if origin_amr_string or origin_comment_string:
         comment_list.append(origin_comment_string)
         amr_list.append(origin_amr_string)
 
+	# replace ordinals with numbers for JAMR aligner
+
+    ordinal_to_number_map = {
+        '0th': '0',
+        '1st': '1',
+        '2nd': '2',
+        '3rd': '3',
+        '4th': '4',
+        '5th': '5',
+        '6th': '6',
+        '7th': '7',
+        '8th': '8',
+        '9th': '9',
+        '11th': '11',
+        '12th': '12',
+        '13th': '13',
+    }
+
+    def replace_number_ordinal_with_number(m):
+        prefix_number = m.group(1)
+        ordinal = ordinal_to_number_map[m.group(2).lower()]
+        return prefix_number+ordinal
+
+    number_ordinal = re.compile(r'((?:^|\W)(?:\d*))('+'|'.join(ordinal_to_number_map.keys())+')(?=\W|$)', re.I)
+
+    def number_ordinal_to_number(s):
+        return number_ordinal.sub(replace_number_ordinal_with_number, s, 0)
+
     for i in xrange(len(instances)):
         output_tok.write(comment_list[i])
-        output_tok.write("# ::tok %s\n" % (' '.join(instances[i].get_tokenized_sent())))
+        output_tok.write("# ::tok %s\n" % (' '.join(number_ordinal_to_number(tok) for tok in instances[i].get_tokenized_sent())))
         output_tok.write(amr_list[i])
         output_tok.write('\n')
 
@@ -254,8 +283,13 @@ def preprocess(input_file,START_SNLP=True,INPUT_AMR=True, align=True, use_amr_to
             print "Reading aligned AMR ..."
             # read aligned amr and transfer alignment comments
             comments_with_alignment,_ = readAMR(aligned_amr_file)
+            alignment_count = 0
             for comment,comment_with_alignment in zip(comments,comments_with_alignment):
-                comment['alignments'] = comment_with_alignment['alignments']
+                if 'alignments' in comment_with_alignment:
+                    comment['alignments'] = comment_with_alignment['alignments']
+                    alignment_count += 1
+            if alignment_count < len(comments):
+                print "WARNING: only %i out of %i sentences has alignments" % (alignment_count, len(comments))
 
         tokenized_sentences = None
         try:
@@ -279,7 +313,7 @@ def preprocess(input_file,START_SNLP=True,INPUT_AMR=True, align=True, use_amr_to
         proc1 = StanfordCoreNLP(tokenize=not tokenized_sentences)
 
         # preprocess 1: tokenization, POS tagging and name entity using Stanford CoreNLP
-        if START_SNLP: proc1.setup()
+        # if START_SNLP: proc1.setup()
 
         instances = proc1.parse(tmp_sent_filename if proc1.tokenize else tok_sent_filename)
 
@@ -300,8 +334,13 @@ def preprocess(input_file,START_SNLP=True,INPUT_AMR=True, align=True, use_amr_to
             print "Reading aligned AMR ..."
             # read aligned amr and transfer alignment comments
             comments_with_alignment,_ = readAMR(aligned_amr_file)
+            alignment_count = 0
             for comment,comment_with_alignment in zip(comments,comments_with_alignment):
-                comment['alignments'] = comment_with_alignment['alignments']
+                if 'alignments' in comment_with_alignment:
+                    comment['alignments'] = comment_with_alignment['alignments']
+                    alignment_count += 1
+            if alignment_count < len(comments):
+                print "WARNING: only %i out of %i sentences has alignments" % (alignment_count, len(comments))
 
         from progress import Progress
         p = Progress(len(instances), estimate=True, values=True)

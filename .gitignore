@@ -73,3 +73,17 @@ jamr/
 # models
 *.m.gz
 *.m.bz2
+
+# SMATCH
+scripts/smatch-v2.0.2.tar.gz
+smatch.py
+amr.py
+
+# LDC2015E86_DEFT_Phase_2_AMR_Annotation_R1 dataset
+LDC2015E86_DEFT_Phase_2_AMR_Annotation_R1*
+
+# golds
+golds/*
+
+# data
+data/*

@@ -65,7 +65,9 @@ def write_parsed_amr(parsed_amr,instances,amr_file,suffix='parsed',hand_alignmen
     for pamr,inst in zip(parsed_amr,instances):
         if inst.comment:
             output.write('# %s\n' % (' '.join(('::%s %s')%(k,v.strip()) for k,v in inst.comment.items() if k in ['id','date','snt-type','annotator'])))
-            if 'snt' in inst.comment:
+            if 'src-snt' in inst.comment:
+                output.write('# ::snt %s\n' % inst.comment['src-snt'].strip())	# prefer original sentence if present
+            elif 'snt' in inst.comment:
                 output.write('# ::snt %s\n' % inst.comment['snt'].strip())
             if 'tok' in inst.comment:
                 output.write('# ::tok %s\n' % inst.comment['tok'].strip())
@@ -149,8 +151,14 @@ def main():
     arg_parser.add_argument('--section',choices=['proxy','all'],default='all',help='choose section of the corpus. Only works for LDC2014T12 dataset.')
     arg_parser.add_argument('--amrtokens',action='store_true',help='use AMR tokens together with --amrfmt and ::tok in comments of input AMR file')
     arg_parser.add_argument('-o', '--output', help='specify parse mode output filename')
+    arg_parser.add_argument('-W', action='store_true', help='disable warnings')
 
     args = arg_parser.parse_args()
+
+    if args.W:
+        import common.AMRGraph, common.SpanGraph
+        common.AMRGraph.warn_file = None
+        common.SpanGraph.warn_file = None
 
     amr_file = args.amr_file
     instances = None
@@ -346,7 +354,7 @@ def main():
         print >> experiment_log ,"DONE TRAINING!"
         
     elif args.mode == 'parse': # actual parsing
-        test_instances = preprocess(amr_file,START_SNLP=False,INPUT_AMR=args.amrfmt, use_amr_tokens=args.amrtokens)
+        test_instances = preprocess(amr_file,START_SNLP=False,INPUT_AMR=args.amrfmt, align=False, use_amr_tokens=args.amrtokens)
         if args.section != 'all':
             print "Choosing corpus section: %s"%(args.section)
             tcr = constants.get_corpus_range(args.section,'test')
