@@ -98,7 +98,7 @@ class Progress:
             if complete:
                 self.stream.write(' total: ')
             else:
-                total_seconds = total_seconds/progress - total_seconds
+                total_seconds = total_seconds/progress - total_seconds if progress > 0 else 0
                 self.stream.write(' est/ela: ')
 
             hours, remainder = divmod(total_seconds, 3600)
