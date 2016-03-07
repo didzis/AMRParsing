@@ -686,7 +686,7 @@ class AMR(defaultdict):
                 u'”': '_quote_close',
         }
         for v,concept in self.node_to_concepts.items():
-            normalized_concepts[v] = normalized_concepts.get(concept, concept)
+            self.node_to_concepts[v] = normalized_concepts.get(concept, concept)
         
         amr_string = ""
         
