@@ -365,7 +365,9 @@ def main():
         model = Model.load_model(args.model)
         parser = Parser(model=model,oracle_type=DET_T2G_ORACLE_ABT,action_type=args.actionset,verbose=args.verbose,elog=experiment_log)
         print >> experiment_log ,"BEGIN PARSING"
-        span_graph_pairs,results = parser.parse_corpus_test(test_instances)
+        # span_graph_pairs,results = parser.parse_corpus_test(test_instances)
+        from multiprocess import process
+        results = process(test_instances, lambda inst: GraphState.get_parsed_amr(parser.parse(inst,train=False)[1].A))
         if args.output:
             write_parsed_amr(results,test_instances,args.output,suffix=None)
         else:
