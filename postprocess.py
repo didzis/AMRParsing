@@ -5,6 +5,7 @@
 from __future__ import print_function
 
 import sys, re, os, json
+from collections import defaultdict
 
 if sys.version_info.major < 3:
     reload(sys)
@@ -15,9 +16,15 @@ try:
     # load wiki database
     with open(os.path.join(os.path.dirname(__file__), 'wiki.jsons')) as f:
         wikidb = {}
+        wikidb2 = defaultdict(list)
+        opre = re.compile(r':(op\d+) \"([^"]+)\"')
         for line in f:
             concept, wiki, name_ops = json.loads(line.strip())
             wikidb[(concept, name_ops.lower())] = wiki
+            wikidb2[concept].append({
+                "wiki": None if wiki == "-" else wiki.strip('"'),
+                "name_ops": { op:value for op,value in opre.findall(name_ops.lower()) }
+            })
 
     # load nationalities database
     with open(os.path.join(os.path.dirname(__file__), 'nationalities.json')) as f:
@@ -30,6 +37,84 @@ try:
     null_edge_null_tag = re.compile(r':null_edge \(x\d+ / null_tag\)')
     empty_and_concept = re.compile(r':x \(x\d+ / and\)')
     closing_brackets = re.compile(r'^\s*\)+\s*$')
+
+    def postprocess(amr):
+        from common.util import StrLiteral, Literal, Polarity
+
+        # fix variables starting with number
+        for var in list(amr.node_to_concepts.keys()):
+            if var[0] >= '0' and var[0] <= '9':
+                newvar = 'number'+var
+                for i,root in enumerate(list(amr.roots)):
+                    if root == var:
+                        amr.roots[i] = newvar
+                amr.node_to_concepts[newvar] = amr.node_to_concepts[var]
+                del amr.node_to_concepts[var]
+                for source,edges in list(amr.items()):
+                    if source == var:
+                        del amr[source]
+                        amr[newvar] = edges
+                    else:
+                        for edge,targets in edges.items():
+                            if len(targets) != 1:
+                                # print('WARNING: unknown targets format:', targets)
+                                continue
+                            if targets[0] == var:
+                                edges.remove(edge, targets)
+                                edges.append(edge, (newvar,))
+        # empty "and" concept/variable
+        empty_and = set(v for v,concept in amr.node_to_concepts.items() if concept == 'and' and not amr.get(v))
+        # variables with null_tag concept and any outgoint edges
+        null_tag_vars = set(v for v,concept in amr.node_to_concepts.items() if concept == 'null_tag' and not amr.get(v))
+        # remove edges, fix targets
+        for source,edges in amr.items():
+            for edge,targets in list(edges.items()):
+                if len(targets) != 1:
+                    # print('WARNING: unknown targets format:', targets)
+                    continue
+                if type(targets[0]) in (StrLiteral, Literal):
+                    repl = None
+                    if '""' in targets[0]:
+                        repl = '__invalid_quotes__'
+                    if targets[0][:] in nationalities:
+                        repl = nationalities[targets[0][:]]
+                    if repl:
+                        edges.remove(edge, targets)
+                        edges.append(edge, (type(targets[0])(repl),))
+                elif edge == 'null_edge':
+                    if targets[0] in null_tag_vars:
+                        edges.remove(edge, targets)
+                elif edge == 'x':
+                    if targets[0] in empty_and:
+                        edges.remove(edge, targets)
+                elif edge == 'name':
+                    name_edges = amr.get(targets[0], {})
+                    name_ops = set(name_edges.keys())
+                    for data in wikidb2.get(amr.node_to_concepts.get(source, None), []):
+                        # existing wiki ?
+                        # stop = False
+                        # for t in edges.get('wiki', []):
+                        #     if len(t) == 1 and t[0] == data['wiki']:
+                        #         stop = True
+                        # if stop:
+                        #     break
+                        # replace existing wiki
+                        for t in edges.get('wiki', []):
+                            edges.remove('wiki', t)
+                        # check if name :opN edges match
+                        expected_name_edges = data['name_ops']
+                        expected_name_ops = set(data['name_ops'].keys())
+                        if expected_name_ops <= name_ops and expected_name_ops >= name_ops:
+                            match = True
+                            for op in name_ops:
+                                if len(name_edges[op]) != 1 or expected_name_edges[op] != name_edges[op][0][:].lower():
+                                    match = False
+                                    break
+                            if match:
+                                edges.append('wiki', (StrLiteral(data['wiki']) if data['wiki'] else Polarity('-'),))
+                                break
+        return amr
+
 
 except KeyboardInterrupt:
     print('Interrupted', file=sys.stderr)
@@ -141,7 +226,7 @@ def line_iter(lines, line_index, inc):
         yield lines[line_index]
         line_index += inc
 
-def process_amr(amr, compact_amr, search_str=':name'):
+def process_amr_string(amr, compact_amr, search_str=':name'):
     for line_index, (line, compact_line) in enumerate(zip(amr, compact_amr)):
         start = 0
         compact_start = 0
@@ -205,7 +290,7 @@ if __name__ == "__main__":
                 if not amr:
                     break
 
-                for bwd,fwd,line_index,pos in process_amr(amr, [' '+line.strip() for line in amr]):
+                for bwd,fwd,line_index,pos in process_amr_string(amr, [' '+line.strip() for line in amr]):
 
                     # extract concept
                     m = concept_re.match(bwd)

@@ -7,6 +7,7 @@ echo "Setup Stanford CoreNLP ..."
 cd "$basedir/stanfordnlp"
 wget http://nlp.stanford.edu/software/stanford-corenlp-full-2013-06-20.zip
 unzip stanford-corenlp-full-2013-06-20.zip
+ln -s stanford-corenlp-full-2013-06-20 stanford-corenlp
 #wget http://nlp.stanford.edu/software/stanford-parser-full-2014-01-04.zip 
 #unzip stanford-parser-full-2014-01-04.zip
 
@@ -28,3 +29,6 @@ tar xvf smatch-v2.0.2.tar.gz --strip-components=1 "*/amr.py" "*/smatch.py"
 chmod +x ../smatch.py
 rm smatch.py
 mv amr.py ..
+
+echo "Install python modules for REST API"
+pip install --user --upgrade flask flask-cors pyyaml

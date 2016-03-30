@@ -1,0 +1,28 @@
+{
+  "name": "camr-rest-demo",
+  "homepage": "https://github.com/didzis/CAMR",
+  "authors": [
+    "Didzis Gosko <didzis.gosko@gmail.com>"
+  ],
+  "description": "CAMR REST API Demo UI",
+  "main": "",
+  "moduleType": [],
+  "license": "MIT",
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "angular-bootstrap": "^1.2.4",
+    "bootstrap-bower": "^3.0.0",
+    "jquery": "^2.2.2",
+    "js-yaml": "^3.5.5",
+    "spin.js": "^2.3.2",
+    "ace-editor-bower": "^1.2.2",
+    "file-saver": "*"
+  }
+}

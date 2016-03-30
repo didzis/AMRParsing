@@ -471,7 +471,7 @@ try:
         ))
 
 
-    def preprocess_line(line):
+    def preprocess_line(line, debug=False):
         i = 0
         # for title,r,s,*extra in fixres:
         for entry in fixres:
@@ -489,11 +489,14 @@ try:
                     start_line = line
             else:
                 line = r.sub(s, line, 0)
-            if before != line:
+            if debug and before != line:
                 repl_statistics[i][1].append([before, line])
             i += 1
 
         return line
+
+    def preprocess(text):
+        return preprocess_line(text)
 
 
     repl_statistics = []
@@ -581,7 +584,7 @@ try:
                         else:
                             endpos = len(line)-1    # exclude newline
                         print('# ::src-snt', line[pos:endpos].strip())
-                        line = line[0:pos] + preprocess_line(line[pos:endpos]) + line[endpos:]
+                        line = line[0:pos] + preprocess_line(line[pos:endpos], debug=debug) + line[endpos:]
                 else:
                     line = wikire.sub(r'', line)    # remove :wiki's
                 if debug:
