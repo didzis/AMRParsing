@@ -87,3 +87,7 @@ golds/*
 
 # data
 data/*
+
+lib/*.class
+stanfordnlp/*.class
+stanfordnlp/stanford-corenlp

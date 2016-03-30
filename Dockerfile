@@ -10,7 +10,7 @@ RUN add-apt-repository ppa:webupd8team/java -y
 # https://github.com/docker/docker/issues/4032
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y oracle-java8-installer oracle-java8-set-default 
 
-RUN pip install --upgrade pip && pip install bllipparser nltk
+RUN pip install --upgrade pip && pip install bllipparser nltk && pip install --upgrade flask flask-cors pyyaml
 
 
 COPY Dockerfile /camr/
@@ -35,5 +35,7 @@ COPY scripts /camr/scripts
 COPY stanfordnlp /camr/stanfordnlp
 COPY temp /camr/temp
 COPY bllip-parser /camr/bllip-parser
+
+COPY static /camr/static
 
 ENTRYPOINT ["/camr/containerized.sh"]

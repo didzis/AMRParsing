@@ -8,12 +8,16 @@ function usage {
 	echo "CAMR parser runner"
     echo
 	echo "usage: $0 [--amrfmt] [--preserve] [--input NAME] [--output NAME]"
+	echo
+	echo "REST mode:"
+	echo "       $0 --rest [--help] [more REST mode options...]"
     echo
 	echo "--amrfmt       expect input file to be in AMR format"
 	echo "--preserve     preserve pre-processed file and parsed AMR (before post-processing)"
 	echo "--preserve-all preserve all intermediate files"
 	echo "--input NAME   input filename relative to data directory (default: $input)"
 	echo "--output NAME  output filename relative to data directory (default: $input.final)"
+	echo "--rest         REST API mode, see --rest --help for more additional options"
 	echo
 	echo "required docker configuration: mount input and output file directory to $datadir"
 	echo
@@ -21,9 +25,26 @@ function usage {
 	echo "* input file must be mounted to $datadir/input"
 	echo "* output file must be mounted to $datadir/output.final"
 	echo
-	echo "note: requires up to 18GB of RAM"
+	echo "note: requires up to 22GB of RAM"
 	echo
 }
+
+# REST mode
+for arg in $@; do
+    if [ "$arg" == "--rest" ] ; then
+		# remove --rest argument
+		args=()
+		for arg in "$@" ; do
+			if [ "$arg" != "--rest" ]; then
+				args=("${args[@]}" "$arg")
+			fi
+		done
+		cd $basedir
+		basedir=.
+		$basedir/rest.py "${args[@]}"
+        exit $?
+    fi
+done
 
 for arg in $@; do
     if [ "$arg" == "--help" ] || [ "$arg" == "-h" ]; then
