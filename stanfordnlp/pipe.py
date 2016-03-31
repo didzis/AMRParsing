@@ -64,7 +64,7 @@ class CoreNLP:
 
         # split lines
         if type(text) is str or type(text) is unicode:
-            text = text.split('\n')
+            text = text.strip().split('\n')
         # join lines
         if type(text) is list or type(text) is tuple:
             text = '\n'.join(l for l in (x.strip() for x in text) if l)

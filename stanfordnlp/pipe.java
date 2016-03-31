@@ -85,6 +85,7 @@ public class pipe {
 				}
 			}
 		}
+		System.err.println("Terminating");
 		in.close();
 		out.close(); 
 	}

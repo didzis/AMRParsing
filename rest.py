@@ -440,6 +440,8 @@ def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
             if fmt.lower() not in ('json', 'yaml', 'yml'):
                 return Response(response='invalid output format: '+fmt, status=400, mimetype='text/plain')
 
+            input_array = None
+            output_to_input_map = None
             content_type = request.headers.get('Content-Type')
             if content_type == 'text/plain':
                 data = request.data
@@ -448,7 +450,12 @@ def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
                     data = data.decode('utf-8', errors='ignore')
                     data = data.encode('utf-8')
             elif content_type == 'application/json':
-                data = [item if type(item) is unicode else item.get('text', '__no_text_error__') for item in request.get_json()]
+                input_array = request.get_json()
+                # convert input array to list of strings (including empty strings)
+                data = [item.strip() if type(item) is unicode else item.get('text', '').strip() for item in input_array]
+                # map expected output array (excluded empty strings) to input array items (map indexes)
+                output_to_input_map = [i for i,val in enumerate(data) if val]
+                data = '\n'.join(item for item in data if item)
             else:
                 return Response(response='invalid content-type header value', status=400, mimetype='text/plain')
 
@@ -457,16 +464,37 @@ def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
             if not ('*/*' in accept or 'application/json' in accept or 'application/json' in accept):
                 return Response(response='invalid accept header value', status=400, mimetype='text/plain')
 
-            if fmt.lower() == 'json' and ('*/*' in accept or 'application/json' in accept):
-                result = parser(data, ssplit)
+            if (fmt.lower() == 'json' and '*/*' not in accept and 'application/json' not in accept) or \
+                (fmt.lower() == 'yaml' and '*/*' not in accept and 'application/yaml' not in accept):
+                return Response(response='required output format inconsistent with accept header', status=400, mimetype='text/plain')
+
+            result = parser(data, ssplit)
+
+            if input_array and output_to_input_map:
+                # we have input array and mapping between output and input, let's update input_array in place
+                for i,item in enumerate(result):
+                    j = output_to_input_map[i]
+                    if type(input_array[j]) is dict:
+                        input_array[j].update(item)
+                    # elif type(input_array[j]) is unicode:
+                    else:
+                        input_array[j] = item
+                # remaining string items convert to dicts if any
+                for i,val in enumerate(input_array):
+                    if type(val) is unicode:
+                        input_array[i] = {}
+                result = input_array
+
+            # if fmt.lower() == 'json' and ('*/*' in accept or 'application/json' in accept):
+            if fmt.lower() == 'json':
                 return Response(response=json.dumps(result), status=200, mimetype='application/json')
-            elif fmt.lower() == 'yaml' and ('*/*' in accept or 'application/yaml' in accept):
-                result = parser(data, ssplit)
+            # elif fmt.lower() == 'yaml' and ('*/*' in accept or 'application/yaml' in accept):
+            elif fmt.lower() == 'yaml':
                 for item in result:
                     item['AMRtext'] = amr_str(item['AMRtext'].replace('\t', '    '))
                 return Response(yaml.dump(result), status=200, mimetype='application/yaml')
 
-            return Response(response='required output format inconsistent with accept header', status=400, mimetype='text/plain')
+            return Response(response='invalid expected format setting', status=400, mimetype='text/plain')
             # return Response(response=json.dumps(result), status=200, mimetype='application/json')
             # return jsonify(result)
         except KeyboardInterrupt:
@@ -480,10 +508,15 @@ def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
             traceback.print_exc()
             return Response(response=traceback.format_exc(), status=500, mimetype='text/html')
 
+    # @app.route('/')
+    # def root():
+    #     # return app.send_static_file('static/index.html')
+    #     return app.send_static_file('index.html')
+
+    @app.route('/<path:path>/')
     @app.route('/')
-    def root():
-        # return app.send_static_file('static/index.html')
-        return app.send_static_file('index.html')
+    def serve_index(path=''):
+        return app.send_static_file(os.path.join(path, 'index.html'))
 
     app.run(host='0.0.0.0', port=port, static_files={'/': os.path.join(os.path.dirname(__file__), 'static')}, threaded=True)
 
@@ -517,6 +550,7 @@ if __name__ == "__main__":
     arg_parser.add_argument('--nlp-threads', type=int, default=0, help='number of threads for NLP')
     arg_parser.add_argument('--dep-threads', type=int, default=0, help='number of threads for BLLIP')
     arg_parser.add_argument('--amr-threads', type=int, default=0, help='number of threads for AMR')
+    arg_parser.add_argument('--test', action='store_true', help='test modules and quit')
 
     args = arg_parser.parse_args()
 
@@ -531,12 +565,12 @@ if __name__ == "__main__":
         print >> sys.stderr, 'Error, model file does not exist:', model
         sys.exit(1)
 
-    start_REST(model, port=port, debug=debug, ssplit=ssplit, no_ssplit=no_ssplit,
-            amr_threads=args.amr_threads, nlp_threads=args.nlp_threads, dep_threads=args.dep_threads)
+    if not args.test:
+        start_REST(model, port=port, debug=debug, ssplit=ssplit, no_ssplit=no_ssplit,
+                amr_threads=args.amr_threads, nlp_threads=args.nlp_threads, dep_threads=args.dep_threads)
+        sys.exit(0)
 
     # some tests below
-
-    quit()
 
     texts = [
         "We’ve all seen the films.",
@@ -547,15 +581,13 @@ if __name__ == "__main__":
         "They were in everything from Lawrence of Arabia to The Monkees."
     ]
 
-    if True:
+    if False:
         parser = Parser(model)
         x = parser('\n'.join(texts))
         print(x)
         parser.stop()
 
-    quit()
-
-    if True:
+    if False:
         nlp = NLP()
 
         result = nlp(texts[0])

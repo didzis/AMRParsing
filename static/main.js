@@ -45,7 +45,8 @@ angular.module('app', [
 			$scope.data.results.sentences = response.data;
 			$scope.data.results.json = angular.toJson(response.data, true);
 			// fix: convert AMR tabs to spaces (for YAML)
-			for(let sentence of response.data) {
+			var sentence;
+			for(sentence of response.data) {
 				sentence.AMRtext = sentence.AMRtext.replace(/\t/g, '    ');
 			}
 			$scope.data.results.yaml = jsyaml.dump(response.data, { flowLevel: 3, sortKeys: true });
@@ -70,7 +71,8 @@ angular.module('app', [
                 if(file.name.match(/\.amr/i)) {
 					var m, sentences = [];
 					data = data.split('\n');
-					for(let line of data) {
+					var line;
+					for(line of data) {
 						m = line.match(/^#.*::snt (.+?)(?: ::\w+ .*)?$/);
 						if(m)
 							sentences.push(m[1]);

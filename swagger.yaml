@@ -1,0 +1,115 @@
+swagger: '2.0'
+
+# This is your document metadata
+info:
+  version: "0.0.1"
+  title: CAMR REST API
+
+#host: <ip here>:5000
+
+paths:
+  '/api/parse':
+    post:
+      summary: Process input text document with AMR parser.
+      description: |
+        Will invoke CAMR parser on input text document
+      consumes:
+        - text/plain
+        - application/json
+      produces:
+        - application/json
+        - application/yaml
+      parameters:
+        - name: document
+          in: body
+          required: true
+          description: Text of input document
+          schema:
+            type: array
+            title: InputSentences
+            items:
+              type: object
+              title: InputSentence
+              description: Object or string representing single sentence
+              properties:
+                text:
+                  title: InputSentenceText
+                  type: string
+      responses:
+        200:
+          description: Successful response
+          schema:
+            title: ArrayOfSentences
+            type: array
+            items:
+              title: Sentence
+              description: Represents a sentence processed with AMR parser
+              type: object
+              properties:
+                AMRtext:
+                  type: string
+                instances:
+                  title: ArrayOfAMRInstances
+                  description: Array of AMR instances; represents nodes in AMR graph
+                  type: array
+                  items:
+                    title: AMRInstance
+                    description: AMR instance; represents a node in AMR graph
+                    type: object
+                    properties:
+                      index:
+                        type: integer
+                      concept:
+                        type: string
+                      tokenIndex:
+                        type: integer
+                relations:
+                  title: ArrayOfAMRRelations
+                  description: Array of relations between two AMR instances or AMR instance and a constant; represents edges in AMR graph
+                  type: array
+                  items:
+                    title: AMRRelation
+                    description: Relation between to AMR instances or AMR instance and a constant; represents an ege in AMR graph
+                    type: object
+                    properties:
+                      source:
+                        description: Index of source instance
+                        type: integer
+                      target:
+                        type: integer
+                      edge:
+                        description: Relation edge name
+                        type: string
+                      type:
+                        description: Relation type - if other than 'relation', then points to constant
+                        type: string
+                root:
+                  description: Index of AMR root instance
+                  type: integer
+                text:
+                  description: Sentence text
+                  type: string
+                tokens:
+                  title: ArrayOfSentenceTokens
+                  description: Array of sentence tokens
+                  type: array
+                  items:
+                    title: Token
+                    description: Sentence token
+                    type: object
+                    properties:
+                      index:
+                        description: Token index starting with 1
+                        type: integer
+                      text:
+                        description: Token text
+                        type: string
+                      lemma:
+                        description: Token lemma
+                        type: string
+                      pos:
+                        description: Part-Of-Speech
+                        type: string
+                      ne:
+                        description: Named Entity
+                        type: string

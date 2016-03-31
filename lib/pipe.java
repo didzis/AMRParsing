@@ -54,6 +54,7 @@ public class pipe {
 
 			System.out.println(dependenciesToString.invoke(null, gs, gs.typedDependenciesCCprocessed(true), t, conllx, false));
     	}
+		System.err.println("Terminating");
 	    in.close();
 		out.close(); 
 	}
