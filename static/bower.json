@@ -23,6 +23,7 @@
     "js-yaml": "^3.5.5",
     "spin.js": "^2.3.2",
     "ace-editor-bower": "^1.2.2",
-    "file-saver": "*"
+    "file-saver": "*",
+    "swagger-ui": "^2.1.4"
   }
 }

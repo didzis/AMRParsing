@@ -37,6 +37,7 @@ echo "Download Swagger Editor"
 cd "$basedir/static"
 wget https://github.com/swagger-api/swagger-editor/releases/download/v2.9.9/swagger-editor.zip
 unzip swagger-editor.zip
-mv dist swagger
+mv dist swagger-editor
 rm swagger-editor.zip
-cp "$basedir/swagger.yaml" "swagger/spec-files/default.yaml"
+cp "$basedir/swagger.yaml" "swagger-editor/spec-files/default.yaml"
+cp "$basedir/swagger.yaml" "swagger/swagger.yaml"

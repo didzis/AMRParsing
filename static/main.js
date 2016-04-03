@@ -92,6 +92,13 @@ angular.module('app', [
 		}
 	};
 
+	$scope.showSwagger = function () {
+		window.location.href = '/swagger';
+	};
+
+	$scope.showSwaggerEditor = function () {
+		window.location.href = '/swagger-editor';
+	};
 })
 .directive('dropFile', function ($parse, $timeout) {
     return {

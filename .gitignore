@@ -91,3 +91,7 @@ data/*
 lib/*.class
 stanfordnlp/*.class
 stanfordnlp/stanford-corenlp
+
+static/swagger-editor
+static/bower_components
+static/swagger/swagger.yaml
