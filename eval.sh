@@ -1,7 +1,7 @@
 #!/bin/bash
 
 datadir=data
-goldfile=golds/test
+global_goldfile=golds/test
 testfile_basename="test.parsed.final"
 
 function usage {
@@ -9,7 +9,7 @@ function usage {
     echo
 	echo "usage: $0 [DATADIR] [--gold FILE] [--test FILE]"
     echo
-	echo "--gold FILE   gold AMR file (default: golds/test)"
+	echo "--gold FILE   gold AMR file (default: DATADIR/test_gold or golds/test)"
 	echo "--test FILE   test AMR file (default: DATADIR/test.parsed.final)"
 	echo
 	echo "Default data/model directory: $datadir"
@@ -59,7 +59,25 @@ if [ "$testfile" == "" ]; then
 	testfile="$datadir/$testfile_basename"
 fi
 
-if [ ! -f "$goldfile" ]; then
+if [ "$goldfile" == "" ]; then
+
+	# user not specified gold file explicitly
+
+	# local goldfile
+	if [ -f "$datadir/test_gold" ]; then
+		goldfile="$datadir/test_gold"
+		echo "using local gold file: $goldfile"
+	elif [ -f "$global_goldfile" ]; then
+		# global goldfile
+		goldfile="$default_goldfile"
+		echo "using global gold file: $goldfile"
+	else
+		echo "error: no local or global gold file found"
+		exit 1
+	fi
+
+elif [ ! -f "$goldfile" ]; then
+	# user specified gold file not found
 	echo "error: missing gold file: $goldfile"
 	exit 1
 fi

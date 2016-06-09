@@ -145,4 +145,6 @@ if [ $skip -ne 1 ]; then
 		echo "error, to see error, try executing manually:"
 		echo "$ `dirname $0`/postprocess.py \"$output\" > \"$final_output\""
 	fi
+else
+	cp "$output" "$final_output"
 fi

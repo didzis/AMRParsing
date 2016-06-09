@@ -29,7 +29,7 @@ def readAMR(amrfile_path):
     amr_string = ''
 
     for line in amrfile.readlines():
-        if line.startswith('#'):
+        if line.lstrip().startswith('#'):
             for m in re.finditer("::([^:\s]+)\s(((?!::).)*)",line):
                 #print m.group(1),m.group(2)
                 comment[m.group(1)] = m.group(2)
@@ -348,16 +348,22 @@ def preprocess(input_file,START_SNLP=True,INPUT_AMR=True, align=True, use_amr_to
         SpanGraph.graphID = 0
         for i in range(len(instances)):
 
-            amr = AMR.parse_string(amr_strings[i])
-            if 'alignments' in comments[i]:
-                alignment,s2c_alignment = Aligner.readJAMRAlignment(amr,comments[i]['alignments'])
-                #ggraph = SpanGraph.init_ref_graph(amr,alignment,instances[i].tokens)
-                ggraph = SpanGraph.init_ref_graph_abt(amr,alignment,s2c_alignment,instances[i].tokens)
-                #ggraph.pre_merge_netag(instances[i])
-                #print >> log, "Graph ID:%s\n%s\n"%(ggraph.graphID,ggraph.print_tuples())
-                instances[i].addAMR(amr)
-                instances[i].addGoldGraph(ggraph)
-            instances[i].addComment(comments[i])
+            try:
+                amr = AMR.parse_string(amr_strings[i])
+                if 'alignments' in comments[i]:
+                    alignment,s2c_alignment = Aligner.readJAMRAlignment(amr,comments[i]['alignments'])
+                    #ggraph = SpanGraph.init_ref_graph(amr,alignment,instances[i].tokens)
+                    ggraph = SpanGraph.init_ref_graph_abt(amr,alignment,s2c_alignment,instances[i].tokens)
+                    #ggraph.pre_merge_netag(instances[i])
+                    #print >> log, "Graph ID:%s\n%s\n"%(ggraph.graphID,ggraph.print_tuples())
+                    instances[i].addAMR(amr)
+                    instances[i].addGoldGraph(ggraph)
+                instances[i].addComment(comments[i])
+            except:
+                print 'Error for AMR with comments:', ', '.join('%s=%s' % kv for kv in comments[i].items())
+                print '             and AMR string:'
+                print amr_strings[i]
+                raise
             p += 1
         p.complete()
 

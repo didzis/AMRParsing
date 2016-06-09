@@ -137,8 +137,22 @@ if [ $platinum -eq 0 ]; then
 		else
 			error=1
 			echo "error, check $errlog for error messages"
+			exit 1
 		fi
 	done
+
+	# write gold file
+	input="$testfile"
+	output="$destdir/test_gold"
+	echo -n "Writing gold file $output ..."
+	cp "$input" "$output"
+	if [ $? -eq 0 ]; then
+		echo "ok"
+	else
+		error=1
+		echo "error"
+		exit 1
+	fi
 else
 	# sentences to be removed from train+dev set for platinum trainset
 	platinum_rm_snt="910 1025 1622 1838 1888 3023 4213 5067 5329 5330 5448 5671 5831 6427 7107 7136 7525 7626 7664 8131 8154 8457 8577 9094 9180 9786 10067 10078 10161 11131 11515 11598 11932 11933 12099 12201 12717 12849 13600 13738 13963 14240 14398 14491 14631 14745 15043 15423 15639"
@@ -156,10 +170,12 @@ else
 		else
 			error=1
 			echo "error, check $errlog for error messages"
+			exit 1
 		fi
 	else
 		error=1
 		echo "error, check $errlog for error messages"
+		exit 1
 	fi
 
 	input="$testfile"
@@ -172,6 +188,20 @@ else
 	else
 		error=1
 		echo "error, check $errlog for error messages"
+		exit 1
+	fi
+
+	# write gold file
+	input="$testfile"
+	output="$destdir/test_gold"
+	echo -n "Writing gold file $output ..."
+	cp "$input" "$output"
+	if [ $? -eq 0 ]; then
+		echo "ok"
+	else
+		error=1
+		echo "error"
+		exit 1
 	fi
 fi
 
