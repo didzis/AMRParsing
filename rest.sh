@@ -27,11 +27,17 @@ function check_image {
 	fi
 }
 
+if [ -t 0 ]; then
+	docker_tty=-it
+else
+	docker_tty=
+fi
+
 for arg in $@; do
     if [ "$arg" == "--help" ] || [ "$arg" == "-h" ]; then
 		usage
 		check_image
-		docker run --rm -it $image --rest --help
+		docker run --rm $docker_tty $image --rest --help
         exit $?
     fi
 done
@@ -55,7 +61,7 @@ while [ $# -gt 0 ]; do
 	fi
 done
 
-echo Executing: docker run --rm -p $port:5000 -it $image --rest "${args[@]}"
+echo Executing: docker run --rm -p $port:5000 $docker_tty $image --rest "${args[@]}"
 check_image
 
 echo
@@ -63,4 +69,4 @@ echo REST API will be available at host IP port $port
 sleep 1
 echo
 
-docker run --rm -p $port:5000 -it $image --rest "${args[@]}"
+docker run --rm -p $port:5000 $docker_tty $image --rest "${args[@]}"
