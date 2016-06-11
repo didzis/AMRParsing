@@ -1,3 +1,15 @@
+# REST API and Demo UI for CAMR + wrapper	
+Ready to run [docker](https://www.docker.com/) image available at dockerhub:
+
+```
+docker run --rm -p 5000:5000 -it didzis/camrrest --rest
+```
+On Linux open [http://localhost:5000](http://localhost:5000), on MacOS X or Windows open [http://192.168.99.100:5000](http://192.168.99.100:5000). Alternatively, execute: ```$ ./rest.sh```.
+
+*NOTE: docker image requires at least 2GB of disk space and up to 22GB of RAM.*
+
+Demo User Interface includes REST API specification in [Swagger](http://swagger.io/) format.
+
 # Wrapper for CAMR parser
 Ready to run [docker](https://www.docker.com/) image available at dockerhub:
 
