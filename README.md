@@ -22,16 +22,16 @@ Alternatively, execute: ```$ ./camrwrapper.sh --help```.
 This is AMR parser used in SemEval 2016 Task 8. For details see:
 
 ```
-@InProceedings{gbarzdins-dgosko:2016:NAACL-HLT,
-  author    = {Barzdins, Guntis and  Gosko, Didzis},
-  title     = {RIGA: Impact of Smatch Extensions and Character-Level Neural Translation on AMR Parsing Accuracy},
-  booktitle = {Proceedings of the 2016 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies},
+@InProceedings{barzdins-gosko:2016:SemEval,
+  author    = {Barzdins, Guntis  and  Gosko, Didzis},
+  title     = {RIGA at SemEval-2016 Task 8: Impact of Smatch Extensions and Character-Level Neural Translation on AMR Parsing Accuracy},
+  booktitle = {Proceedings of the 10th International Workshop on Semantic Evaluation (SemEval-2016)},
   month     = {June},
   year      = {2016},
   address   = {San Diego, California},
   publisher = {Association for Computational Linguistics},
-  pages     = {to appear},
-  url       = {to appear}
+  pages     = {1143--1147},
+  url       = {http://www.aclweb.org/anthology/S16-1176}
 }
 ```
 
