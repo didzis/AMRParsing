@@ -20,6 +20,17 @@ paths:
         - application/json
         - application/yaml
       parameters:
+        - name: ssplit
+          in: query
+          required: false
+          description: Split Sentences
+          type: boolean
+        - name: fmt
+          in: query
+          required: false
+          description: Output Format
+          type: string
+          enum: [json, yaml]
         - name: document
           in: body
           required: true

@@ -436,9 +436,9 @@ def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
                 except ValueError:
                     ssplit = ssplit.lower() in ('t', 'true', 'y', 'yes')
 
-            fmt = request.args.get('fmt', 'json')
-            if fmt.lower() not in ('json', 'yaml', 'yml'):
-                return Response(response='invalid output format: '+fmt, status=400, mimetype='text/plain')
+            fmt = request.args.get('fmt', 'json').lower()
+            if fmt not in ('json', 'yaml', 'yml'):
+                return Response(response='invalid output format: '+request.args.get('fmt', fmt), status=400, mimetype='text/plain')
 
             input_array = None
             output_to_input_map = None
@@ -461,11 +461,11 @@ def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
 
             accept = tuple(x.strip() for x in request.headers.get('Accept', '*/*').split(','))
 
-            if not ('*/*' in accept or 'application/json' in accept or 'application/json' in accept):
+            if not ('*/*' in accept or 'application/json' in accept or 'application/yaml' in accept):
                 return Response(response='invalid accept header value', status=400, mimetype='text/plain')
 
-            if (fmt.lower() == 'json' and '*/*' not in accept and 'application/json' not in accept) or \
-                (fmt.lower() == 'yaml' and '*/*' not in accept and 'application/yaml' not in accept):
+            if (fmt == 'json' and '*/*' not in accept and 'application/json' not in accept) or \
+                (fmt == 'yaml' and '*/*' not in accept and 'application/yaml' not in accept):
                 return Response(response='required output format inconsistent with accept header', status=400, mimetype='text/plain')
 
             result = parser(data, ssplit)
@@ -485,11 +485,11 @@ def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
                         input_array[i] = {}
                 result = input_array
 
-            # if fmt.lower() == 'json' and ('*/*' in accept or 'application/json' in accept):
-            if fmt.lower() == 'json':
+            # if fmt == 'json' and ('*/*' in accept or 'application/json' in accept):
+            if fmt == 'json':
                 return Response(response=json.dumps(result), status=200, mimetype='application/json')
-            # elif fmt.lower() == 'yaml' and ('*/*' in accept or 'application/yaml' in accept):
-            elif fmt.lower() == 'yaml':
+            # elif fmt == 'yaml' and ('*/*' in accept or 'application/yaml' in accept):
+            elif fmt == 'yaml':
                 for item in result:
                     item['AMRtext'] = amr_str(item['AMRtext'].replace('\t', '    '))
                 return Response(yaml.dump(result), status=200, mimetype='application/yaml')
