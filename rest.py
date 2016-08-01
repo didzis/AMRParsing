@@ -418,6 +418,7 @@ def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
     class amr_str(str): pass
 
     yaml.add_representer(amr_str, lambda dumper,data: dumper.represent_scalar(u'tag:yaml.org,2002:str', data, style='|'))
+    yaml.add_representer(unicode, lambda dumper,data: dumper.represent_scalar(u'tag:yaml.org,2002:str', data))
 
     from flask import Flask, request, Response, jsonify
     from flask.ext.cors import cross_origin
@@ -492,7 +493,7 @@ def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
             elif fmt == 'yaml':
                 for item in result:
                     item['AMRtext'] = amr_str(item['AMRtext'].replace('\t', '    '))
-                return Response(yaml.dump(result), status=200, mimetype='application/yaml')
+                return Response(yaml.dump(result, encoding='utf-8', allow_unicode=True), status=200, mimetype='application/yaml')
 
             return Response(response='invalid expected format setting', status=400, mimetype='text/plain')
             # return Response(response=json.dumps(result), status=200, mimetype='application/json')
