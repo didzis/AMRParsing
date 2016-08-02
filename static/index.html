@@ -177,12 +177,18 @@
 					ng-model="data.results.yaml" mode="yaml" wrap="settings.wrap" theme="settings.theme.name"></code-editor>
 			</div>
 		</uib-tab>
-		<uib-tab heading="Swagger..." select="showSwagger()">
+		<uib-tab heading="Swagger..." select-x="showSwagger()">
+			<uib-tab-heading>
+				<a href="/swagger" ng-click="$event.stopPropagation()">Swagger...</a>
+			</uib-tab-heading>
 			<div class="fill" style="top: 44px">
 				Open <a href="/swagger">Swagger UI</a>
 			</div>
 		</uib-tab>
-		<uib-tab heading="Swagger Editor..." select="showSwaggerEditor()">
+		<uib-tab heading="Swagger Editor..." select-x="showSwaggerEditor()">
+			<uib-tab-heading>
+				<a href="/swagger-editor" ng-click="$event.stopPropagation()">Swagger Editor...</a>
+			</uib-tab-heading>
 			<div class="fill" style="top: 44px">
 				Open <a href="/swagger-editor">Swagger Editor</a>
 			</div>
