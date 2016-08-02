@@ -35,6 +35,12 @@ function check_image {
 	fi
 }
 
+docker version > /dev/null
+if [ $? -ne 0 ]; then
+	echo "Docker not installed or engine not running."
+	exit 1
+fi
+
 if [ -t 0 ]; then
 	docker_tty=-it
 else
@@ -116,4 +122,15 @@ echo REST API will be available at host IP port $port
 sleep 1
 echo
 
-docker run $detach_rm $name_arg -p $port:5000 $docker_tty $image --rest "${args[@]}"
+id=`docker run $detach_rm $name_arg -p $port:5000 $docker_tty $image --rest "${args[@]}"`
+
+if [ "$name" != "" ]; then
+	id="$name"
+fi
+
+if [ "$detach_rm" == "-d" ]; then
+	echo
+	echo "Running in detached mode, to see output log, execute:"
+	echo "$ docker logs -f $id"
+	echo
+fi
