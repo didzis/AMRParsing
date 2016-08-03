@@ -134,7 +134,7 @@ public class pipe {
 			}
 			sb.append("]");
 			// if(!shortStyle)
-				sb.append(",\"text\":\"").append(sentence.toString().replace("\\", "\\\\").replace("\"", "\\\"")).append("\"");
+				sb.append(",\"text\":\"").append(sentence.toString().replace("\\", "\\\\").replace("\"", "\\\"").replace("\t", "\\t")).append("\"");
 			sb.append("}");
 			first = false;
 		}

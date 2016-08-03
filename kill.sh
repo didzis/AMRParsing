@@ -7,7 +7,7 @@ fi
 
 # ps -u $USER -o pid,args | grep "${args[@]}"
 PS=`ps -u $USER -o pid,args`
-PS=`echo "$PS" | grep "${args[@]}"`
+PS=`echo "$PS" | grep -i "${args[@]}"`
 echo "$PS"
 # PIDS=`ps -u $USER -o pid,args | grep $args | sed 's/^[ ]//g' | cut -d ' ' -f 1`
 PIDS=`echo "$PS" | sed 's/^[ ]//g' | cut -d ' ' -f 1`
