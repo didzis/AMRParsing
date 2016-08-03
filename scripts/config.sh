@@ -19,7 +19,11 @@ patch -p1 < $basedir/scripts/jamr_align.patch
 ./setup
 
 echo "Setup Charniak Parser ..."
-pip install --user bllipparser
+if [ "`uname`" = "Darwin" ]; then
+	`dirname $0`/install-bllip-parser-osx.sh "$basedir"
+else
+	pip2 install --user bllipparser
+fi
 
 echo "Setup SMATCH 2.0.2 ..."
 cd "$basedir/scripts"
@@ -31,7 +35,7 @@ rm smatch.py
 mv amr.py ..
 
 echo "Install python modules for REST API"
-pip install --user --upgrade flask flask-cors pyyaml
+pip2 install --user --upgrade flask flask-cors pyyaml
 
 echo "Download Swagger Editor"
 cd "$basedir/static"
