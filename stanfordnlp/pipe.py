@@ -155,7 +155,7 @@ if __name__ == "__main__":
     print >> sys.stderr, 'Starting sentence-per-line CoreNLP ...'
     lsplit = make_nlp(verbose=verbose)
 
-    r = lsplit("This is a sentence-per-line text input.\nSecond sentence in next line.", debug=debug)
+    r = lsplit("This is a sentence-per-line text input. Second sentence in the same line.\nThird sentence in next line.", debug=debug)
     print r
     print >> sys.stderr, '---'
     r = lsplit("Testing multi-document input.", debug=debug)

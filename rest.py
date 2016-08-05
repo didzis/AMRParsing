@@ -179,25 +179,32 @@ class NLP(ProcessorProxy):
 class DepParser(ProcessorProxy):
     def __init__(self, processes=4, debug=False):
 
-        def processor_factory():
+        # load model in main thread to reduce crash rate under OS X
+        from lib.pipe import CoreNLPDepConv
+        from bllipparser.ModelFetcher import download_and_install_model
+        from bllipparser import RerankingParser
+        model_type = 'WSJ+Gigaword'
+        path_to_model = download_and_install_model(model_type,'./bllip-parser/models')
+        print "Loading BLLIP parser model: %s ..." % (model_type)
+        parser = RerankingParser.from_unified_model_dir(path_to_model)
+        print "BLLIP parser model %s loaded" % (model_type)
+        parser.simple_parse('Dummy sentence.')  # test parse
 
-            from lib.pipe import CoreNLPDepConv
-            from bllipparser.ModelFetcher import download_and_install_model
-            from bllipparser import RerankingParser
-            model_type = 'WSJ+Gigaword'
-            path_to_model = download_and_install_model(model_type,'./bllip-parser/models')
-            print "Loading BLLIP parser model: %s ..." % (model_type)
-            parser = RerankingParser.from_unified_model_dir(path_to_model)
-            print "BLLIP parser model %s loaded" % (model_type)
+        def processor_factory():
 
             def factory():
                 conv = CoreNLPDepConv(verbose=debug)
                 def parse(line):
+                    if debug:
+                        print >> sys.stderr, "Dependency parser input:", line
                     result = "(())"  # dummy output if wasn't able to parse
                     try:
                         line = line.strip()
                         if line:
+                            # result = parser.simple_parse(line.encode('utf8') if type(line) is unicode else line)
                             result = parser.simple_parse(line.split())
+                            if debug:
+                                print >> sys.stderr, "Dependency parser output:", result
                             result = conv(result)
                     # except KeyboardInterrupt:
                     #     raise
@@ -207,6 +214,8 @@ class DepParser(ProcessorProxy):
                         pass
                         # print >> sys.stderr, 'WARNING: unable to parse sentence:'
                         # print >> sys.stderr, ll.strip()
+                    if debug:
+                        print >> sys.stderr, "Dependency parser+converter output:", result
                     return result
                 parse.stop = lambda: conv.stop()
                 return parse
@@ -247,15 +256,17 @@ class Parser:
             # defaults to at least one NLP module - no splitting
             no_ssplit = True
         try:
+            self.depparser = DepParser(dep_threads or self.def_threads, debug=debug)
             self.nlp = NLP(nlp_threads or self.def_threads, debug=debug) if no_ssplit else None
             self.nlp_ssplit = NLP(nlp_threads or self.def_threads,
                     'default_ssplit.properties', debug=debug, name='CoreNLP(ssplit):') if ssplit else None
-            self.depparser = DepParser(dep_threads or self.def_threads, debug=debug)
             self.parser = AMRParser(model, amr_threads or self.def_threads, debug=debug)
         except KeyboardInterrupt:
             self.stop()
         self.amr2dict = AMR2dict_factory()
         self.debug = debug
+        import uuid
+        self.sentence_separator = str(uuid.uuid4())
 
     def stop(self):
         if self.nlp:
@@ -265,13 +276,29 @@ class Parser:
         self.depparser.stop = True
         self.parser.stop = True
 
-    def __call__(self, text, ssplit=False):
+    def __call__(self, data, ssplit=False, verbose=False):
 
         try:
+            if not data:
+                return
+            debug = self.debug
+
+            sentence_groups = 0
+            if type(data) is list or type(data) is tuple:
+                if ssplit:
+                    text = ('\n%s\n' % self.sentence_separator).join(data)
+                    sentence_groups = len(data)
+                else:
+                    text = '\n'.join(data)
+            elif type(data) is str or type(data) is unicode:
+                text = data
 
             from stanfordnlp.data import Data
             Data.current_sen = 1
 
+            if verbose:
+                print >> sys.stderr, 'Input:', len(text), 'bytes'
+                print >> sys.stderr, 'Step 1: preprocess'
             if debug:
                 print >> sys.stderr, 'Input Text:', text
             text = preprocess(text)
@@ -279,16 +306,30 @@ class Parser:
                 print >> sys.stderr, 'Preprocessed (wrapper) Text:', text
                 print >> sys.stderr, 'Sentence split lines:', ssplit
 
+            if verbose:
+                print >> sys.stderr, 'Step 2: NLP'
             if ssplit and self.nlp_ssplit or (not self.nlp and self.nlp_ssplit):
                 sentences = self.nlp_ssplit(text)
             else:
                 sentences = self.nlp(text)
 
+            if verbose:
+                print >> sys.stderr, len(sentences), 'sentences'
             if debug:
                 print >> sys.stderr, 'CoreNLP result sentences:', sentences
 
+            ssep = self.sentence_separator
+            instance_to_group = []
+            group = 0
             instances = []
+            annotated_sentences = []
             for sentence in sentences:
+                if sentence['text'] == ssep:
+                    group += 1
+                    continue
+                if instance_to_group > 0:
+                    annotated_sentences.append(sentence)
+                    instance_to_group.append(group)
                 data = Data()
                 data.addText(sentence['text'])
                 # data.addText(' '.join(token['text'] for token in sentence['tokens']))
@@ -300,6 +341,16 @@ class Parser:
                     data.addToken(token['text'], None, None, token['lemma'], token['pos'], token.get('ne', 'O'))
                 instances.append(data)
 
+            # if sentence_groups > 0:
+            #     # print(group, sentence_groups)
+            #     assert group+1 == sentence_groups
+            #
+            # else:
+            if sentence_groups == 0:
+                annotated_sentences = sentences
+
+            if verbose:
+                print >> sys.stderr, 'Step 3: dependency parser'
             if debug:
                 print >> sys.stderr, 'Dependency parser input sentences:', [u' '.join(instance.get_tokenized_sent()) for instance in instances]
 
@@ -328,13 +379,31 @@ class Parser:
                         if r_trace is not None:
                             instances[i].addTrace( rel, l_index, r_trace )
 
-            results = self.parser(instances)
+            if verbose:
+                print >> sys.stderr, 'Step 4: amr parser'
 
+            amrs = self.parser(instances)
+
+            if verbose:
+                print >> sys.stderr, 'Parsing done'
             if debug:
-                print >> sys.stderr, 'AMR parser results:', results
+                print >> sys.stderr, 'AMR parser results:', amrs
 
             amr2dict = self.amr2dict
-            results = [amr2dict(postprocess(amr),sentence) for sentence,amr in zip(sentences,results)]
+            if sentence_groups > 0:
+                results = []
+                group_sentences = []
+                last_group = None
+                for group,sentence,amr in zip(instance_to_group,annotated_sentences,amrs):
+                    if last_group != group and last_group is not None:
+                        results.append(group_sentences)
+                        group_sentences = []
+                    last_group = group
+                    group_sentences.append(amr2dict(postprocess(amr),sentence))
+                if group_sentences:
+                    results.append(group_sentences)
+            else:
+                results = [amr2dict(postprocess(amr),sentence) for sentence,amr in zip(annotated_sentences,amrs)]
 
             if debug:
                 print >> sys.stderr, 'AMR parser converted results:', results
@@ -347,7 +416,7 @@ class Parser:
 
 
 def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
-        amr_threads=Parser.def_threads, nlp_threads=Parser.def_threads, dep_threads=Parser.def_threads):
+        amr_threads=Parser.def_threads, nlp_threads=Parser.def_threads, dep_threads=Parser.def_threads, verbose=False):
 
     import signal, time, thread
 
@@ -431,7 +500,7 @@ def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
     def api_parse():
         try:
             ssplit = request.args.get('ssplit', False)
-            if type(ssplit) is str:
+            if type(ssplit) is str or type(ssplit) is unicode:
                 try:
                     ssplit = bool(int(ssplit))
                 except ValueError:
@@ -456,7 +525,8 @@ def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
                 data = [item.strip() if type(item) is unicode else item.get('text', '').strip() for item in input_array]
                 # map expected output array (excluded empty strings) to input array items (map indexes)
                 output_to_input_map = [i for i,val in enumerate(data) if val]
-                data = '\n'.join(item for item in data if item)
+                # data = '\n'.join(item for item in data if item)
+                data = [item for item in data if item]
             else:
                 return Response(response='invalid content-type header value', status=400, mimetype='text/plain')
 
@@ -469,14 +539,20 @@ def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
                 (fmt == 'yaml' and '*/*' not in accept and 'application/yaml' not in accept):
                 return Response(response='required output format inconsistent with accept header', status=400, mimetype='text/plain')
 
-            result = parser(data, ssplit)
+            result = parser(data, ssplit, verbose=verbose)
+
+            sys.stdout.flush()
 
             if input_array and output_to_input_map:
+                # print(result)
                 # we have input array and mapping between output and input, let's update input_array in place
                 for i,item in enumerate(result):
                     j = output_to_input_map[i]
                     if type(input_array[j]) is dict:
-                        input_array[j].update(item)
+                        if type(item) is list or type(item) is tuple:
+                            input_array[j].update(dict(sentences=item))
+                        else:
+                            input_array[j].update(item)
                     # elif type(input_array[j]) is unicode:
                     else:
                         input_array[j] = item
@@ -545,6 +621,7 @@ if __name__ == "__main__":
 
     arg_parser.add_argument('-p', '--port', type=int, default=port, help='change port')
     arg_parser.add_argument('-m', '--model', type=str, default=model, help='specify model filename')
+    arg_parser.add_argument('-v', '--verbose', action='store_true', help='enable verbose mode')
     arg_parser.add_argument('-d', '--debug', action='store_true', help='enable debug mode')
     arg_parser.add_argument('-s', '--ssplit', type=int, default=0, help='sentence split modes enabled: 0 - all enabled, -1 - only no ssplit, 1 - only ssplit')
     arg_parser.add_argument('-t', '--threads', type=int, default=Parser.def_threads, help='default number of threads for each module (NLP, BLLIP, AMR), number of system cores: '+str(Parser.__dict__['cpu_count']()))
@@ -559,6 +636,7 @@ if __name__ == "__main__":
     no_ssplit = args.ssplit <= 0
     port = args.port
     debug = args.debug
+    verbose = args.verbose
     model = args.model
     Parser.def_threads = args.threads
 
@@ -568,7 +646,7 @@ if __name__ == "__main__":
 
     if not args.test:
         start_REST(model, port=port, debug=debug, ssplit=ssplit, no_ssplit=no_ssplit,
-                amr_threads=args.amr_threads, nlp_threads=args.nlp_threads, dep_threads=args.dep_threads)
+                amr_threads=args.amr_threads, nlp_threads=args.nlp_threads, dep_threads=args.dep_threads, verbose=verbose)
         sys.exit(0)
 
     # some tests below
