@@ -76,3 +76,6 @@ if __name__ == "__main__":
     # must restart convertor
     r = conv("(S1 (S (NP (DT The) (NN center)) (VP (MD will) (VP (VB bolster) (NP (NP (NP (NNP NATO) (POS 's)) (NNS defenses)) (PP (IN against) (NP (NNP cyber) (NNS attacks)))))) (. .)))'))))))))")
     print r
+    print '---'
+    r = conv("(())")
+    print r

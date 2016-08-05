@@ -99,7 +99,7 @@ class ProcessorProxy(Thread):
         # self.results_lock = Lock()
         self.result_available = Condition()
         
-        self.start()
+        # self.start()
 
     def put(self, id, result):
         # with self.results_lock:
@@ -194,18 +194,21 @@ class DepParser(ProcessorProxy):
 
             def factory():
                 conv = CoreNLPDepConv(verbose=debug)
-                def parse(line):
+                def parse(data):
                     if debug:
-                        print >> sys.stderr, "Dependency parser input:", line
+                        print >> sys.stderr, "Dependency parser input:", data
                     result = "(())"  # dummy output if wasn't able to parse
                     try:
-                        line = line.strip()
-                        if line:
-                            # result = parser.simple_parse(line.encode('utf8') if type(line) is unicode else line)
-                            result = parser.simple_parse(line.split())
-                            if debug:
-                                print >> sys.stderr, "Dependency parser output:", result
-                            result = conv(result)
+                        if type(data) is str or type(data) is unicode:
+                            line = data.strip()
+                            if line:
+                                # result = parser.simple_parse(line.encode('utf8') if type(line) is unicode else line)
+                                result = parser.simple_parse(line.split())
+                        elif type(data) is list or type(data) is tuple:
+                            result = parser.simple_parse(data)
+                        if debug:
+                            print >> sys.stderr, "Dependency parser output:", result
+                        result = conv(result)
                     # except KeyboardInterrupt:
                     #     raise
                     except Exception as e:
@@ -257,10 +260,14 @@ class Parser:
             no_ssplit = True
         try:
             self.depparser = DepParser(dep_threads or self.def_threads, debug=debug)
+            self.parser = AMRParser(model, amr_threads or self.def_threads, debug=debug)
             self.nlp = NLP(nlp_threads or self.def_threads, debug=debug) if no_ssplit else None
             self.nlp_ssplit = NLP(nlp_threads or self.def_threads,
                     'default_ssplit.properties', debug=debug, name='CoreNLP(ssplit):') if ssplit else None
-            self.parser = AMRParser(model, amr_threads or self.def_threads, debug=debug)
+            self.depparser.start()
+            self.parser.start()
+            self.nlp.start()
+            self.nlp_ssplit.start()
         except KeyboardInterrupt:
             self.stop()
         self.amr2dict = AMR2dict_factory()
@@ -354,7 +361,8 @@ class Parser:
             if debug:
                 print >> sys.stderr, 'Dependency parser input sentences:', [u' '.join(instance.get_tokenized_sent()) for instance in instances]
 
-            deptrees = self.depparser([u' '.join(instance.get_tokenized_sent()) for instance in instances])
+            # deptrees = self.depparser([u' '.join(instance.get_tokenized_sent()) for instance in instances])
+            deptrees = self.depparser([instance.get_tokenized_sent() for instance in instances])
 
             if debug:
                 print >> sys.stderr, 'Dependency parser output trees:', deptrees
