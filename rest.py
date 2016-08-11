@@ -173,7 +173,9 @@ class ProcessorProxy(Thread):
 class NLP(ProcessorProxy):
     def __init__(self, threads=4, props='default.properties', debug=False, name='CoreNLP:'):
         from stanfordnlp.pipe import make_nlp
-        ProcessorProxy.__init__(self, lambda: make_nlp(threads, props, verbose=debug, name=name))
+        # ProcessorProxy.__init__(self, lambda: make_nlp(threads, props, verbose=debug, name=name))
+        self.processor = make_nlp(threads, props, verbose=debug, name=name, wait=False, start_stderr_watch=False)
+        ProcessorProxy.__init__(self, lambda: self.processor)
         # will buffer at pipe level
 
 class DepParser(ProcessorProxy):
@@ -194,6 +196,11 @@ class DepParser(ProcessorProxy):
 
             def factory():
                 conv = CoreNLPDepConv(verbose=debug)
+                multiword_tokens = re.compile(r'\(\w+ ([^()\s]+\s+[^()\s]+(?:\s+[^()\s]+)*)\)')
+                def fix_multiword_tokens(m):
+                    head, tail = m.group().split(' ', 1)
+                    tail = tail.replace(' ', '_')
+                    return ' '.join((head, tail))
                 def parse(data):
                     if debug:
                         print >> sys.stderr, "Dependency parser input:", data
@@ -208,12 +215,14 @@ class DepParser(ProcessorProxy):
                             result = parser.simple_parse(data)
                         if debug:
                             print >> sys.stderr, "Dependency parser output:", result
+                        result = multiword_tokens.sub(fix_multiword_tokens, result)
                         result = conv(result)
                     # except KeyboardInterrupt:
                     #     raise
                     except Exception as e:
                         print >> sys.stderr, "Dependency parser (BLLIP / Charniak-Johnson parser) ERROR:"
                         traceback.print_exc(file=sys.stderr)
+                        result = ['root(ROOT-0, ROOT-1)']       # empty dependency tree (result of conversion from "(())")
                         pass
                         # print >> sys.stderr, 'WARNING: unable to parse sentence:'
                         # print >> sys.stderr, ll.strip()
@@ -259,21 +268,27 @@ class Parser:
             # defaults to at least one NLP module - no splitting
             no_ssplit = True
         try:
-            self.depparser = DepParser(dep_threads or self.def_threads, debug=debug)
-            self.parser = AMRParser(model, amr_threads or self.def_threads, debug=debug)
             self.nlp = NLP(nlp_threads or self.def_threads, debug=debug) if no_ssplit else None
             self.nlp_ssplit = NLP(nlp_threads or self.def_threads,
                     'default_ssplit.properties', debug=debug, name='CoreNLP(ssplit):') if ssplit else None
-            self.depparser.start()
-            self.parser.start()
+            # self.nlp.start(False)
+            # self.nlp_ssplit.start(False)
+            self.depparser = DepParser(dep_threads or self.def_threads, debug=debug)
+            self.parser = AMRParser(model, amr_threads or self.def_threads, debug=debug)
             self.nlp.start()
             self.nlp_ssplit.start()
+            self.nlp.processor.start_stderr_watch()
+            self.nlp_ssplit.processor.start_stderr_watch()
+            self.depparser.start()
+            self.parser.start()
         except KeyboardInterrupt:
             self.stop()
         self.amr2dict = AMR2dict_factory()
         self.debug = debug
         import uuid
-        self.sentence_separator = str(uuid.uuid4())
+        self.sentence_separator = str(uuid.uuid4()).replace('-', '')
+        self.preprocess = preprocess
+        self.postprocess = postprocess
 
     def stop(self):
         if self.nlp:
@@ -283,7 +298,7 @@ class Parser:
         self.depparser.stop = True
         self.parser.stop = True
 
-    def __call__(self, data, ssplit=False, verbose=False):
+    def __call__(self, data, ssplit=False, preprocess=True, postprocess=True, verbose=False):
 
         try:
             if not data:
@@ -305,12 +320,15 @@ class Parser:
 
             if verbose:
                 print >> sys.stderr, 'Input:', len(text), 'bytes'
-                print >> sys.stderr, 'Step 1: preprocess'
+                if preprocess:
+                    print >> sys.stderr, 'Step 1: preprocess'
             if debug:
                 print >> sys.stderr, 'Input Text:', text
-            text = preprocess(text)
+            if preprocess:
+                text = self.preprocess(text)
             if debug:
-                print >> sys.stderr, 'Preprocessed (wrapper) Text:', text
+                if preprocess:
+                    print >> sys.stderr, 'Preprocessed (wrapper) Text:', text
                 print >> sys.stderr, 'Sentence split lines:', ssplit
 
             if verbose:
@@ -396,6 +414,11 @@ class Parser:
                 print >> sys.stderr, 'Parsing done'
             if debug:
                 print >> sys.stderr, 'AMR parser results:', amrs
+
+            if postprocess:
+                postprocess = self.postprocess
+            else:
+                postprocess = lambda amr: amr
 
             amr2dict = self.amr2dict
             if sentence_groups > 0:
@@ -514,6 +537,27 @@ def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
                 except ValueError:
                     ssplit = ssplit.lower() in ('t', 'true', 'y', 'yes')
 
+            pretty = request.args.get('pretty', False)
+            if type(pretty) is str or type(pretty) is unicode:
+                try:
+                    pretty = bool(int(pretty))
+                except ValueError:
+                    pretty = pretty.lower() in ('t', 'true', 'y', 'yes')
+
+            preprocess = request.args.get('preprocess', True)
+            if type(preprocess) is str or type(preprocess) is unicode:
+                try:
+                    preprocess = bool(int(preprocess))
+                except ValueError:
+                    preprocess = preprocess.lower() in ('t', 'true', 'y', 'yes')
+
+            postprocess = request.args.get('postprocess', True)
+            if type(postprocess) is str or type(postprocess) is unicode:
+                try:
+                    postprocess = bool(int(postprocess))
+                except ValueError:
+                    postprocess = postprocess.lower() in ('t', 'true', 'y', 'yes')
+
             fmt = request.args.get('fmt', 'json').lower()
             if fmt not in ('json', 'yaml', 'yml'):
                 return Response(response='invalid output format: '+request.args.get('fmt', fmt), status=400, mimetype='text/plain')
@@ -527,10 +571,13 @@ def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
                     # data = data.decode('utf-8')
                     data = data.decode('utf-8', errors='ignore')
                     data = data.encode('utf-8')
-            elif content_type == 'application/json':
-                input_array = request.get_json()
+            elif content_type == 'application/json' or content_type == 'application/yaml':
+                if content_type == 'application/json':
+                    input_array = request.get_json()
+                elif content_type == 'application/yaml':
+                    input_array = yaml.load(request.data)
                 # convert input array to list of strings (including empty strings)
-                data = [item.strip() if type(item) is unicode else item.get('text', '').strip() for item in input_array]
+                data = [item.strip() if type(item) in (unicode, str) else item.get('text', '').strip() for item in input_array]
                 # map expected output array (excluded empty strings) to input array items (map indexes)
                 output_to_input_map = [i for i,val in enumerate(data) if val]
                 # data = '\n'.join(item for item in data if item)
@@ -547,12 +594,12 @@ def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
                 (fmt == 'yaml' and '*/*' not in accept and 'application/yaml' not in accept):
                 return Response(response='required output format inconsistent with accept header', status=400, mimetype='text/plain')
 
-            result = parser(data, ssplit, verbose=verbose)
+            result = parser(data, ssplit, preprocess=preprocess, postprocess=postprocess, verbose=verbose)
 
             sys.stdout.flush()
 
             if input_array and output_to_input_map:
-                # print(result)
+                # print(json.dumps(result, indent=2))
                 # we have input array and mapping between output and input, let's update input_array in place
                 for i,item in enumerate(result):
                     j = output_to_input_map[i]
@@ -572,7 +619,7 @@ def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
 
             # if fmt == 'json' and ('*/*' in accept or 'application/json' in accept):
             if fmt == 'json':
-                return Response(response=json.dumps(result), status=200, mimetype='application/json')
+                return Response(response=json.dumps(result, ensure_ascii=False, indent=2 if pretty else None), status=200, mimetype='application/json')
             # elif fmt == 'yaml' and ('*/*' in accept or 'application/yaml' in accept):
             elif fmt == 'yaml':
                 for item in result:

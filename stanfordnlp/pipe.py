@@ -9,7 +9,8 @@ def based(*parts):
 
 class CoreNLP:
 
-    def __init__(self, args=['-props', based('default.properties'), '-threads', '8'], cmd=based('run.sh'), verbose=False, name='CoreNLP:'):
+    def __init__(self, args=['-props', based('default.properties'), '-threads', '8'], cmd=based('run.sh'), verbose=False, name='CoreNLP:',
+            wait=True, start_stderr_watch=True):
         if type(args) is str or type(args) is unicode:
             args = [x for x in args.split(' ') if x]
         self.cmd = [cmd] + list(args)
@@ -17,21 +18,28 @@ class CoreNLP:
         self.proc = None
         self.ready = False
         self.name = name
-        self.start()
+        self.thread = None
+        self.start(wait, start_stderr_watch)
 
-    def start(self):
+    def start_stderr_watch(self):
+        if not self.thread:
+            self.thread = Thread(target=self.__stderr_watch)
+            self.thread.daemon = True
+            self.thread.start()
+
+    def start(self, wait=True, start_stderr_watch=True):
         try:
             self.ready = False
-            self.proc = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.proc = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
         except Exception as e:
             print >> sys.stderr, 'Unable to start:', ' '.join(self.cmd)
             raise
 
-        self.thread = Thread(target=self.__stderr_watch)
-        self.thread.daemon = True
-        self.thread.start()
+        if start_stderr_watch:
+            self.start_stderr_watch()
 
-        return self.wait_ready()
+        if wait:
+            return self.wait_ready()
 
     def stop(self):
         if self.proc is not None and self.proc.poll() is None:
@@ -48,6 +56,7 @@ class CoreNLP:
                 # terminated
                 break
             if line == "Ready":
+                print self.name, 'ready'
                 self.ready = True
 
     def wait_ready(self):
@@ -90,10 +99,10 @@ class CoreNLP:
             return json.loads(line)
 
 
-def make_nlp(threads=4, props='default.properties', verbose=False, name='CoreNLP:'):
+def make_nlp(threads=4, props='default.properties', verbose=False, name='CoreNLP:', wait=True, start_stderr_watch=True):
     if not os.path.isabs(props):
         props = based(props)
-    return CoreNLP(['-props', props, '-threads', str(threads)], verbose=verbose, name=name)
+    return CoreNLP(['-props', props, '-threads', str(threads)], verbose=verbose, name=name, wait=wait, start_stderr_watch=start_stderr_watch)
 
 
 if __name__ == "__main__":

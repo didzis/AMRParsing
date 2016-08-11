@@ -2,125 +2,210 @@ swagger: '2.0'
 
 # This is your document metadata
 info:
-  version: "0.0.1"
+  version: "0.0.2"
   title: CAMR REST API
 
 #host: <ip here>:5000
 
+definitions:
+  InputSentences:
+    type: array
+    title: InputSentences
+    items:
+      type: object
+      title: InputSentence
+      description: |
+        String or object representing single sentence
+        (if object, all fields will be delivered to output transparently)
+      properties:
+        text:
+          title: InputSentenceText
+          type: string
+  InputParagraphs:
+    type: array
+    title: InputParagraphs
+    description: String or object representing a paragraph
+    items:
+      type: object
+      title: InputParagraph
+      description: |
+        String or object representing single sentence
+        (if object, all fields will be delivered to output transparently)
+      properties:
+        text:
+          title: InputParagraphText
+          description: Text of input paragraph
+          type: string
+  Sentences:
+    title: Sentences
+    type: array
+    items:
+      title: Sentence
+      description: Represents a sentence processed with AMR parser
+      type: object
+      properties:
+        AMRtext:
+          type: string
+        instances:
+          title: AMRInstances
+          description: Array of AMR instances; represents nodes in AMR graph
+          type: array
+          items:
+            title: AMRInstance
+            description: AMR instance; represents a node in AMR graph
+            type: object
+            properties:
+              index:
+                type: integer
+              concept:
+                type: string
+              tokenIndex:
+                type: integer
+        relations:
+          title: AMRRelations
+          description: Array of relations between two AMR instances or AMR instance and a constant; represents edges in AMR graph
+          type: array
+          items:
+            title: AMRRelation
+            description: Relation between to AMR instances or AMR instance and a constant; represents an ege in AMR graph
+            type: object
+            properties:
+              source:
+                description: Index of source instance
+                type: integer
+              target:
+                type: integer
+              edge:
+                description: Relation edge name
+                type: string
+              type:
+                description: Relation type - if other than 'relation', then points to constant
+                type: string
+        root:
+          description: Index of AMR root instance
+          type: integer
+        text:
+          description: Sentence text
+          type: string
+        tokens:
+          title: SentenceTokens
+          description: Array of sentence tokens
+          type: array
+          items:
+            title: Token
+            description: Sentence token
+            type: object
+            properties:
+              index:
+                description: Token index starting with 1
+                type: integer
+              text:
+                description: Token text
+                type: string
+              lemma:
+                description: Token lemma
+                type: string
+              pos:
+                description: Part-Of-Speech
+                type: string
+              ne:
+                description: Named Entity
+                type: string
+  Paragraphs:
+    title: Paragraphs
+    type: array
+    items:
+      title: Paragraph
+      description: |
+        Object representing output paragraph
+        (contains all fields from input)
+        or array of sentences if input was array of strings
+      type: object
+      properties:
+        sentences:
+          $ref: '#/definitions/Sentences'
+
 paths:
   '/api/parse':
     post:
-      summary: Process input text document with AMR parser.
+      summary: Process (text/JSON/YAML) document with AMR parser.
       description: |
-        Will invoke CAMR parser on input text document
+        Will invoke CAMR parser with input document in text/JSON/YAML formats
+        (expects sentence per line if plaintext input)
       consumes:
         - text/plain
         - application/json
+        - application/yaml
       produces:
         - application/json
         - application/yaml
       parameters:
-        - name: ssplit
-          in: query
-          required: false
-          description: Split Sentences
-          type: boolean
+        #- name: ssplit
+        #  in: query
+        #  required: false
+        #  description: Split Sentences
+        #  type: boolean
         - name: fmt
           in: query
           required: false
           description: Output Format
           type: string
           enum: [json, yaml]
+        - name: pretty
+          in: query
+          required: false
+          description: Pretty format JSON output
+          type: boolean
         - name: document
           in: body
           required: true
           description: Text of input document
           schema:
-            type: array
-            title: InputSentences
-            items:
-              type: object
-              title: InputSentence
-              description: Object or string representing single sentence
-              properties:
-                text:
-                  title: InputSentenceText
-                  type: string
+            $ref: '#/definitions/InputSentences'
       responses:
         200:
           description: Successful response
           schema:
-            title: ArrayOfSentences
-            type: array
-            items:
-              title: Sentence
-              description: Represents a sentence processed with AMR parser
-              type: object
-              properties:
-                AMRtext:
-                  type: string
-                instances:
-                  title: ArrayOfAMRInstances
-                  description: Array of AMR instances; represents nodes in AMR graph
-                  type: array
-                  items:
-                    title: AMRInstance
-                    description: AMR instance; represents a node in AMR graph
-                    type: object
-                    properties:
-                      index:
-                        type: integer
-                      concept:
-                        type: string
-                      tokenIndex:
-                        type: integer
-                relations:
-                  title: ArrayOfAMRRelations
-                  description: Array of relations between two AMR instances or AMR instance and a constant; represents edges in AMR graph
-                  type: array
-                  items:
-                    title: AMRRelation
-                    description: Relation between to AMR instances or AMR instance and a constant; represents an ege in AMR graph
-                    type: object
-                    properties:
-                      source:
-                        description: Index of source instance
-                        type: integer
-                      target:
-                        type: integer
-                      edge:
-                        description: Relation edge name
-                        type: string
-                      type:
-                        description: Relation type - if other than 'relation', then points to constant
-                        type: string
-                root:
-                  description: Index of AMR root instance
-                  type: integer
-                text:
-                  description: Sentence text
-                  type: string
-                tokens:
-                  title: ArrayOfSentenceTokens
-                  description: Array of sentence tokens
-                  type: array
-                  items:
-                    title: Token
-                    description: Sentence token
-                    type: object
-                    properties:
-                      index:
-                        description: Token index starting with 1
-                        type: integer
-                      text:
-                        description: Token text
-                        type: string
-                      lemma:
-                        description: Token lemma
-                        type: string
-                      pos:
-                        description: Part-Of-Speech
-                        type: string
-                      ne:
-                        description: Named Entity
-                        type: string
+            $ref: '#/definitions/Sentences'
+
+  '/api/parse?ssplit=true':
+    post:
+      summary: Process (text/JSON/YAML) document with AMR parser.
+      description: |
+        Will invoke CAMR parser with input document in text/JSON/YAML formats
+        (will split line into sentences)
+      consumes:
+        - text/plain
+        - application/json
+        - application/yaml
+      produces:
+        - application/json
+        - application/yaml
+      parameters:
+        #- name: ssplit
+        #  in: query
+        #  required: false
+        #  description: Split Sentences
+        #  type: boolean
+        - name: fmt
+          in: query
+          required: false
+          description: Output Format
+          type: string
+          enum: [json, yaml]
+        - name: pretty
+          in: query
+          required: false
+          description: Pretty format JSON output
+          type: boolean
+        - name: document
+          in: body
+          required: true
+          description: Text of input document
+          schema:
+            $ref: '#/definitions/InputParagraphs'
+      responses:
+        200:
+          description: Successful response
+          schema:
+            $ref: '#/definitions/Paragraphs'

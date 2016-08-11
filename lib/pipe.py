@@ -61,8 +61,26 @@ class CoreNLPDepConv:
 
 
 if __name__ == "__main__":
+
+    args = sys.argv[1:]
     
-    conv = CoreNLPDepConv()
+    verbose = '-v' in args or '--verbose' in args or '-d' in args or '--debug' in args
+
+    conv = CoreNLPDepConv(verbose=verbose)
+
+    args = [arg for arg in args if arg[0] != '-']
+
+    if args:
+        for arg in args:
+            if os.path.isfile(arg):
+                with open(arg) as f:
+                    r = conv(f.read())
+                    print r
+            else:
+                r = conv(arg)
+                print r
+            print '---'
+        sys.exit(0)
 
     r = conv("(S1 (S (NP (DT The) (NN center)) (VP (MD will) (VP (VB bolster) (NP (NP (NP (NNP NATO) (POS 's)) (NNS defenses)) (PP (IN against) (NP (NNP cyber) (NNS attacks)))))) (. .)))'))))))))")
     print r
