@@ -7,10 +7,11 @@ fi
 
 # ps -u $USER -o pid,args | grep "${args[@]}"
 PS=`ps -u $USER -o pid,args`
-PS=`echo "$PS" | grep -i "${args[@]}"`
+PS=`echo "$PS" | grep -i "${args[@]}" | grep -v "^\s*$$\s"`
+[ "$PS" = "" ] && echo "no processes found matching: ${args[@]}" && exit 0
 echo "$PS"
 # PIDS=`ps -u $USER -o pid,args | grep $args | sed 's/^[ ]//g' | cut -d ' ' -f 1`
-PIDS=`echo "$PS" | sed 's/^[ ]//g' | cut -d ' ' -f 1`
+PIDS=`echo "$PS" | sed 's/^[ ]*//g' | cut -d ' ' -f 1`
 
 read -p "Kill processes shown above [y/N] ? " -n 1 -r
 echo    # (optional) move to a new line

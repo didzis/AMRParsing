@@ -622,13 +622,19 @@ def start_REST(model, port=5000, debug=False, ssplit=True, no_ssplit=True,
                 return Response(response=json.dumps(result, ensure_ascii=False, indent=2 if pretty else None), status=200, mimetype='application/json')
             # elif fmt == 'yaml' and ('*/*' in accept or 'application/yaml' in accept):
             elif fmt == 'yaml':
-                for item in result:
+                def fix_item(item):
                     if 'sentences' in item:
                         for sentence in item['sentences']:
                             if 'AMRtext' in sentence:
                                 sentence['AMRtext'] = amr_str(sentence['AMRtext'].replace('\t', '    '))
                     elif 'AMRtext' in item:
                         item['AMRtext'] = amr_str(item['AMRtext'].replace('\t', '    '))
+                for item in result:
+                    if type(item) is list:
+                        for item in item:
+                            fix_item(item)
+                    else:
+                        fix_item(item)
                 return Response(yaml.dump(result, encoding='utf-8', allow_unicode=True), status=200, mimetype='application/yaml')
 
             return Response(response='invalid expected format setting', status=400, mimetype='text/plain')

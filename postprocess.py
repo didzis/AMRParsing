@@ -29,6 +29,18 @@ try:
     # load nationalities database
     with open(os.path.join(os.path.dirname(__file__), 'nationalities.json')) as f:
         nationalities = json.load(f)
+        # workaround the old nationalities format with :opN words in-between (remove them and strip quotes from remaining)
+        # separate multi-word input (left/key) nationalities
+        max_nat_words = 1
+        multi_word_nationalities = defaultdict(dict)
+        for key,value in nationalities.items():
+            parts = value.split(' ')
+            if len(parts) > 1:
+                nationalities[key] = ' '.join(v.strip('"') for v in parts if not v.startswith(':op'))
+            parts = key.split(' ')
+            if len(parts) > max_nat_words:
+                max_nat_words = len(parts)
+            multi_word_nationalities[parts[0]][tuple(parts)] = nationalities[key]
 
     # amr fragment locating regexps
     invalid_quotes = re.compile(r'(?<=[^"])?"{3,}(?=[^"]|$)')
@@ -37,6 +49,7 @@ try:
     null_edge_null_tag = re.compile(r':null_edge \(x\d+ / null_tag\)')
     empty_and_concept = re.compile(r':x \(x\d+ / and\)')
     closing_brackets = re.compile(r'^\s*\)+\s*$')
+    opN = re.compile(r'op(\d+)')
 
     def postprocess(amr):
         from common.util import StrLiteral, Literal, Polarity
@@ -68,6 +81,43 @@ try:
         null_tag_vars = set(v for v,concept in amr.node_to_concepts.items() if concept == 'null_tag' and not amr.get(v))
         # remove edges, fix targets
         for source,edges in amr.items():
+            # extract opNs and replace nationalities
+            opNs = { int(opN.match(edge).group(1)):targets for edge,targets in edges.items() if opN.match(edge) and \
+                                                                                        type(targets[0]) in (StrLiteral, Literal) }
+            if opNs:
+                Ns = sorted(opNs.keys())
+                values = [ opNs[n][0][:] for n in Ns ]
+                for i,value in enumerate(values):
+                    if value not in multi_word_nationalities:
+                        continue
+                    mwnats = multi_word_nationalities[value]
+                    repl_words = None
+                    for n in range(2, min(max_nat_words, len(values)-i)+1):
+                        input_words = tuple(values[i:i+n])
+                        repl_words = mwnats.get(input_words)
+                        if not repl_words:
+                            continue
+                        repl_Ns = Ns[i:i+n]
+                        after_Ns = Ns[i+n:]
+                    if not repl_words:
+                        continue
+                    # replace multiple
+                    parts = repl_words.split(' ')
+                    delta = len(parts) - len(input_words)
+                    after_Ns.sort(reverse=True)
+                    for n in after_Ns:
+                        edges.remove('op%i' % n, opNs[n])
+                        edges.append('op%i' % (n+delta), opNs[n])
+                    repl_Ns.sort()
+                    # remove current opNs
+                    for n in repl_Ns:
+                        edges.remove('op%i' % n, opNs[n])
+                    # set opN+i to i-th element of parts
+                    for i,part in enumerate(parts):
+                        edges.append('op%i' % (repl_Ns[0]+i), (type(opNs[repl_Ns[0]][0])(part),))
+                    # end
+                    break
+
             for edge,targets in list(edges.items()):
                 if len(targets) != 1:
                     # print('WARNING: unknown targets format:', targets)
@@ -79,8 +129,34 @@ try:
                     if targets[0][:] in nationalities:
                         repl = nationalities[targets[0][:]]
                     if repl:
-                        edges.remove(edge, targets)
-                        edges.append(edge, (type(targets[0])(repl),))
+                        # if replacement contains multiple words and the edge replaced is in form :opN
+                        # for each replaced word a separate :opN edge must be created and :opN edges that were after
+                        # the replaced one, must be renamed to :opNs with higher N values
+                        parts = repl.split(' ')
+                        if len(parts) > 1 and opN.match(edge): # this is an opN edge, reenumerate if more than one word
+                            delta = len(parts) - 1
+                            # N = int(edge[2:])
+                            N = int(opN.match(edge).group(1))
+                            if ('op%i' % (N+1)) in edges:
+                                # there are opNs after current
+                                # move ops after N to a higher position (+delta)
+                                # first get all op numbers larger than N
+                                ops = [int(match.group(1)) for match in (opN.match(op) for op in edges.keys()) if match and int(match.group(1)) > N]
+                                ops.sort(reverse=True)  # from higher to lower
+                                for op in ops:
+                                    op_name = 'op%i' % op
+                                    op_targets = edges[op_name]
+                                    edges.remove(op_name, op_targets)
+                                    edges.append('op%i' % (op+delta), op_targets)
+                            # remove current opN
+                            edges.remove(edge, targets)
+                            # set opN+i to i-th element of parts
+                            for i,part in enumerate(parts):
+                                edges.append('op%i' % (N+i), (type(targets[0])(part),))
+                        else:
+                            # simple replacement
+                            edges.remove(edge, targets)
+                            edges.append(edge, (type(targets[0])(repl),))
                 elif edge == 'null_edge':
                     if targets[0] in null_tag_vars:
                         edges.remove(edge, targets)
