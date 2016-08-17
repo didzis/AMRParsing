@@ -222,6 +222,8 @@ class DepParser(ProcessorProxy):
                     except Exception as e:
                         print >> sys.stderr, "Dependency parser (BLLIP / Charniak-Johnson parser) ERROR:"
                         traceback.print_exc(file=sys.stderr)
+                        print >> sys.stderr, "INPUT:", data
+                        print >> sys.stderr, "OUTPUT:", result
                         result = ['root(ROOT-0, ROOT-1)']       # empty dependency tree (result of conversion from "(())")
                         pass
                         # print >> sys.stderr, 'WARNING: unable to parse sentence:'

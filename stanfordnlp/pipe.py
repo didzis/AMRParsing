@@ -79,7 +79,7 @@ class CoreNLP:
             text = '\n'.join(l for l in (x.strip() for x in text) if l)
 
         if debug:
-            print >> sys.stderr, self.name, '<<', text+'\n'
+            print >> sys.stderr, self.name, '<<', text
         self.proc.stdin.write(text+'\n\n')
         self.proc.stdin.flush()
 
@@ -96,7 +96,12 @@ class CoreNLP:
             print >> sys.stderr, self.name, '>>', line
 
         if line:
-            return json.loads(line)
+            try:
+                return json.loads(line)
+            except:
+                print >> sys.stderr, self.name, '<<', text
+                print >> sys.stderr, self.name, '>>', line
+                raise
 
 
 def make_nlp(threads=4, props='default.properties', verbose=False, name='CoreNLP:', wait=True, start_stderr_watch=True):
