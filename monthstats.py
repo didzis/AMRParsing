@@ -108,6 +108,7 @@ if __name__ == "__main__":
     data = []
 
     datafn = 'monthstats.json'
+    datafn = os.path.join(os.path.dirname(__file__))
     if os.path.isfile(datafn):
         with open(datafn) as f:
             settings = json.load(f, object_hook=Dict)

@@ -121,7 +121,7 @@ class AMR(defaultdict):
             ("STRLITERAL",u'"[^"]+"|\u201c[^\u201d]+\u201d'),
             ("LITERAL","'[^\s(),]+"),
             ("INTERROGATIVE","\s(interrogative|imperative|expressive)(?=[\s\)])"),
-            ("QUANTITY","[0-9][0-9Ee^+\-\.,:]*(?=[\s()])"),
+            ("QUANTITY","-?[0-9][0-9Ee^+\-\.,:]*(?=[\s()])"),
             ("IDENTIFIER","[^\s()]+"), #no blank within characters
             ("POLARITY","\s(\-|\+)(?=[\s\)])")
         ] 
@@ -565,12 +565,14 @@ class AMR(defaultdict):
                         firsthit = (parent,rel,n) not in self.reentrance_triples
                     else:
                         firsthit = n not in visited_nodes
-                    leaf = False if self[n] else True
+                    leaf = False if type(n) in (str,unicode) and self[n] else True
 
                     node = Node(parent, rel, n, firsthit, leaf, depth, seqID)
                     
                     #print self.node_to_concepts
                     sequence.append(node)
+                    if type(n) not in (str,unicode):
+                        continue
                     
                     # same StrLiteral/Quantity/Polarity should not be revisited
                     if self.reentrance_triples: # for being the same with the amr string readed in
@@ -716,7 +718,7 @@ class AMR(defaultdict):
                         amr_string += "\n%s:%s %s"%(node.depth*"\t",node.trace,node.node_label)
                         
                 else:
-                    if node.firsthit and node.node_label in self.node_to_concepts:
+                    if node.firsthit and node.node_label in self.node_to_concepts and type(node.node_label) in (str,unicode):
                         amr_string += "\n%s:%s (%s / %s)"%(node.depth*"\t",node.trace,node.node_label,self.node_to_concepts[node.node_label])
                     else:
                         if isinstance(node.node_label,StrLiteral):

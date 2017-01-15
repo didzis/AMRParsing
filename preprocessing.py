@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# coding=utf-8
 import sys,argparse,re,os
 from stanfordnlp.corenlp import *
 from common.AMRGraph import *
@@ -29,6 +30,8 @@ def readAMR(amrfile_path):
     amr_string = ''
 
     for line in amrfile.readlines():
+        line = line.replace(u'\x92', u"’")
+        line = line.replace(u'\x85', u"…")
         if line.lstrip().startswith('#'):
             for m in re.finditer("::([^:\s]+)\s(((?!::).)*)",line):
                 #print m.group(1),m.group(2)
@@ -75,6 +78,8 @@ def _write_tok_amr(file_path,amr_file,instances):
     comment_list = []
     amr_list = []
     for line in open(amr_file,'r').readlines():
+        line = line.replace(u'\x92', u"’")
+        line = line.replace(u'\x85', u"…")
         if line.startswith('#'):
             if line.find(' ::') != -1:
                 origin_comment_string += line
@@ -235,27 +240,35 @@ def _add_dependency(instances,result,FORMAT="stanford"):
     elif FORMAT in ["stanfordConvert","stdconv+charniak"]:
         i = 0
         splitre = re.compile(r'\(|, ')
-        for line in result.split('\n'):
-            if line.strip():
-                split_entry = splitre.split(line[:-1])
-                
-                if len(split_entry) == 3:
-                    rel, l_lemma, r_lemma = split_entry
-                    l_lemma, l_index = l_lemma.rsplit('-', 1)
-                    r_lemma, r_index = r_lemma.rsplit('-', 1)
-                    parts = r_lemma.rsplit('^', 1)
-                    if len(parts) < 2 or not parts[1]:
-                        r_trace = None
-                    else:
-                        r_lemma, r_trace = parts
+        try:
+            for line in result.split('\n'):
+                if line.strip():
+                    split_entry = splitre.split(line[:-1])
 
-                    if r_index != 'null':
-                        instances[i].addDependency( rel, l_index, r_index )
-                    if r_trace is not None:
-                        instances[i].addTrace( rel, l_index, r_trace )
-                
-            else:
-                i += 1
+                    if len(split_entry) == 3:
+                        rel, l_lemma, r_lemma = split_entry
+                        l_lemma, l_index = l_lemma.rsplit('-', 1)
+                        r_lemma, r_index = r_lemma.rsplit('-', 1)
+                        parts = r_lemma.rsplit('^', 1)
+                        if len(parts) < 2 or not parts[1]:
+                            r_trace = None
+                        else:
+                            r_lemma, r_trace = parts
+
+                        if r_index != 'null':
+                            instances[i].addDependency( rel, l_index, r_index )
+                        if r_trace is not None:
+                            instances[i].addTrace( rel, l_index, r_trace )
+
+                else:
+                    i += 1
+        except:
+            print '------'
+            print 'Sentence number:', i+1
+            print 'Line:', line
+            print 'Variables (rel, l_index, r_index, r_trace):', (rel, l_index, r_index, r_trace)
+            print 'Tokens [%i]:' % len(instances[i].tokens), instances[i].tokens
+            raise
     else:
         raise ValueError("Unknown dependency format!")
 
@@ -295,6 +308,9 @@ def preprocess(input_file,START_SNLP=True,INPUT_AMR=True, align=True, use_amr_to
         try:
             if use_amr_tokens:
                 tokenized_sentences = [c['tok'] for c in comments] # here should be 'snt'
+                for c in comments:
+                    if 'snt' not in c:
+                        c['snt'] = c['tok']
                 if not os.path.exists(tok_sent_filename):
                     with open(tok_sent_filename,'w') as f:
                         for sentence in tokenized_sentences:

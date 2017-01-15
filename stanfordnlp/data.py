@@ -27,7 +27,7 @@ class Data():
         #self.tokens.append([])
 
     def get_tokenized_sent(self):
-        return [tok['form'] for tok in self.tokens][1:]
+        return [tok['form'].replace(' ', '_') for tok in self.tokens][1:]
         
     def addTree( self, tree ):
         self.tree = tree

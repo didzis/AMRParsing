@@ -41,7 +41,8 @@ def parse_bracketed(s):
     attrs = {}
     temp = {}
     # Substitute XML tags, to replace them later
-    for i, tag in enumerate(re.findall(r"(<[^<>]+>.*<\/[^<>]+>)", s)):
+    # for i, tag in enumerate(re.findall(r"(<[^/][^<>]+>.*<\/[^<>]+>)", s)):
+    for i, tag in enumerate(re.findall(r"(<[^<>]+>)", s)):
         temp["^^^%d^^^" % i] = tag
         s = s.replace(tag, "^^^%d^^^" % i)
     # Load key-value pairs, substituting as necessary
@@ -138,19 +139,33 @@ def parse_stanford_output(filename):
 
         lines = (line.strip() for line in f)
 
+        j = 0
         for line in lines:
+            j += 1
 
             if sentence_re.match(line):
                 sentence = next(lines)
+                j += 1
                 annotation = next(lines)
+                j += 1
                 tokens = annotation[1:-1].split('] [')
                 data = Data()
                 data.addText(sentence)
                 Data.newSen()
                 for i,token in enumerate(tokens):
                     t = parse_bracketed(token)
-                    data.addToken(t[0], t[1][u'CharacterOffsetBegin'], t[1][u'CharacterOffsetEnd'],
-                                  t[1][u'Lemma'],t[1][u'PartOfSpeech'],t[1][u'NamedEntityTag']) #, first=i==0, last=i==len(tokens)-1)
+                    try:
+                        data.addToken(t[0], t[1][u'CharacterOffsetBegin'], t[1][u'CharacterOffsetEnd'],
+                                      t[1][u'Lemma'],t[1][u'PartOfSpeech'],t[1][u'NamedEntityTag']) #, first=i==0, last=i==len(tokens)-1)
+                    except:
+                        print '------'
+                        print 'Sentence:', sentence
+                        print 'Annotation:', annotation
+                        print 'Tokens:', tokens
+                        print 'Line:', j-1
+                        print 'Token [%i]:' % i, token
+                        print 'Parsed token:', t
+                        raise
                 yield data
             else:
                 raise Exception('unexpected line: '+line)
