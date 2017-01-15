@@ -16,7 +16,7 @@ class DepParser(object):
 import sys, traceback
 from multiprocessing import Queue, Process, Lock, JoinableQueue, cpu_count
 from multiprocessing.sharedctypes import Value
-from Queue import Empty
+from Queue import Empty, Full
 from progress import Progress
 
 
@@ -95,8 +95,18 @@ class CharniakParser(DepParser):
         with open(sent_filename,'rb') as f:
             for line in f:
                 l = line.decode('utf8', errors='ignore')
-                queue.put((len(data), l))
-                data.append('')
+                # queue.put((len(data), l))
+                data.append(l)
+
+        feed = enumerate(data)
+        fed_count = 0
+        # feed first 100 items
+        for item in feed:
+            queue.put(item)
+            data[item[0]] = ''
+            fed_count += 1
+            if item[0] >= 1024:
+                break
 
         p = Progress(len(data), estimate=True, values=True) # output progress bar
 
@@ -114,12 +124,34 @@ class CharniakParser(DepParser):
             for job in jobs:
                 job.start()
 
-            # gathering results from jobs
             total_count = 0
+
+            # feed rest items
+            while fed_count < len(data):
+                for item in feed:
+                    while True:
+                        try:
+                            queue.put(item, True, 0.3)
+                            data[item[0]] = ''
+                            fed_count += 1
+                            break
+                        except Full:
+                            # gather some results
+                            try:
+                                while True:
+                                    i,v = results.get(True, 0.3)
+                                    data[i] = v
+                                    total_count += 1
+                                    p.set(count.value)
+                            except Empty:
+                                pass
+                    p.set(count.value)
+
+            # gathering results from jobs
             while total_count < len(data):
                 try:
-                    item = results.get(True, 0.3)   # timeout delay small enough to update progress bar, see below
-                    data[item[0]] = item[1]
+                    i,v = results.get(True, 0.3)   # timeout delay small enough to update progress bar, see below
+                    data[i] = v
                     total_count += 1
                 except Empty:
                     pass
